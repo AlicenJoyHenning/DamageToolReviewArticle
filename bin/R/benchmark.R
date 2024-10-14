@@ -1,4 +1,4 @@
-# Script to run manual and tool-based damaged cell detection for non-ground truth datasets
+# Script to run manual and tool-based methods for each ground truth and non-ground truth datasets
 
 # Load libraries -------
 
@@ -217,6 +217,11 @@ benchmark <- function(
   
   seurat$DF <- NULL
   
+  # For manual ground truth
+  #seurat <- HEK293_apo_live
+  #seurat <- HEK293_proapo_live
+  #seurat <- JoinLayers(seurat)
+  
   # Run DropletQC
   # Extract nf meta data & associated cell barcode from Seurat object
   edDf <- data.frame(nf = as.numeric(seurat$nf), umi = seurat$nCount_RNA)
@@ -320,9 +325,9 @@ benchmark <- function(
   # Select the best fit model (model with lowest combined rank)
   minimum_score <- min(combined_ranks) # For terminal output only 
   best_model_type <- names(which.min(combined_ranks))
-  
+
   if (!is.null(model_method)) {best_model_type <- model_method}
-  
+ 
   # Susbet based on model 
   sce_subset <- filterCells(sce, results[[best_model_type]]$model) 
   
@@ -362,8 +367,9 @@ benchmark <- function(
   # ddqc_counts <- seurat@assays$RNA$counts
   # ddqc <- CreateSeuratObject(counts = ddqc_counts, assay = "RNA", min.cells = 1)
   # mtx <- suppressWarnings(as.matrix(ddqc@assays$RNA$counts))
-  # write.csv(mtx, file = paste0(output_path, "/ddqc_matrix_data.csv"))
-  # 
+  # write.csv(mtx, file = paste0(output_path, "/ddqc/input/", project_name, "_ddqc_matrix_data.csv"))
+
+  
   # cat("\u2714  Input for ddqc prepared \n")
   
   # Read in ddqc results 
@@ -383,11 +389,22 @@ benchmark <- function(
   seurat$ddqc <- ifelse(seurat$ddqc == "True", "cell", "damaged")
   
   # Calculate MALAT1 percentage expression 
+  
+  if (organism == "Hsap"){
   seurat$malat1.ratio <- PercentageFeatureSet(
     object   = seurat,
     features = c("MALAT1"),
     assay    = "RNA"
   )  
+  }
+  
+  if (organism == "Mmus"){
+    seurat$malat1.ratio <- PercentageFeatureSet(
+      object   = seurat,
+      features = c("Malat1"),
+      assay    = "RNA"
+    )  
+  }
   
   
   # Extract df and add cell barcode column 
@@ -398,6 +415,14 @@ benchmark <- function(
   # Transform values for robust outlier detection 
   seurat_df$nCount_RNA <- log10(seurat_df$nCount_RNA)
   seurat_df$nFeature_RNA <- log10(seurat_df$nFeature_RNA)
+  
+  # Transform malat1 counts for cases where they are close to zero 
+  if (project_name %in% c("hLiver")){
+    
+    seurat_df$malat1.ratio <- log10(seurat_df$malat1.ratio)
+    
+  }
+  
 
   # Helper function for detecting multivariate outliers 
   identify_moutliers <- function(df){
@@ -405,6 +430,7 @@ benchmark <- function(
     # Compute robust covariance matrix using the MCD (Minimum Covariance Determinant) method
     mcd_result <- covMcd(df)
     
+
     # Calculate robust Mahalanobis distances
     mahalanobis_distances <- mahalanobis(df, center = mcd_result$center, cov = mcd_result$cov)
     
@@ -427,6 +453,8 @@ benchmark <- function(
   manual1_results <- identify_moutliers(manual1_df)
   seurat$manual_all <- manual1_results$outliers
   
+  # Correct for NA if needed
+  seurat$manual_all <- ifelse(is.na(seurat$manual_all), "cell", seurat$manual_all)
   
   # Manual 2: Mito/Ribo multivariate outliers (robustbase): UMI and feature counts & mitochondrial and ribosomal percentages -------
   
@@ -447,6 +475,9 @@ benchmark <- function(
   manual4_df <- seurat_df[, c("nCount_RNA", "nFeature_RNA", "malat1.ratio")]
   manual4_results <- identify_moutliers(manual4_df)
   seurat$manual_malat1 <- manual4_results$outliers
+  
+  # Correct for NA if needed
+  seurat$manual_malat1 <- ifelse(is.na(seurat$manual_malat1), "cell", seurat$manual_malat1)
   
   
   # Manual 5: Mito univariate outliers (MAD) ------
@@ -548,14 +579,15 @@ cellline_jurkat <- benchmark(project_name = "jurkat",
 
 diseased_liver <- benchmark(project_name = "dLiver",
                             organism = "Hsap",
-                            # resolution = 0.8,
-                            # cluster_ranks = 3,
+                            resolution = 0.8,
+                            cluster_ranks = 3,
                             raw_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/raw/",
                             filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/filtered/",
                             velocyto_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/velocyto/",
                             ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/diseased_liver_ddqc_output.csv",
                             output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
+
 
 # Diseased lung
 diseased_lung <- benchmark(project_name = "dLung",
@@ -571,8 +603,8 @@ diseased_lung <- benchmark(project_name = "dLung",
 # Diseased PBMC
 diseased_PBMC <- benchmark(project_name = "dPBMC",
                            organism = "Hsap",
-                           # resolution = 1.2, 
-                           # cluster_ranks = 1,
+                           resolution = 1.2, 
+                           cluster_ranks = 1,
                            raw_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/filtered/",
                            velocyto_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/velocyto/",
@@ -583,11 +615,13 @@ diseased_PBMC <- benchmark(project_name = "dPBMC",
 
 # 3 healthy tissues -------
 
+# Problem here : 
+
 healthy_liver <- benchmark(project_name = "hLiver",
                            organism = "Hsap",
-                           # resolution = 1,
-                           # cluster_ranks = 7,
-                           model_method = "spline",
+                           resolution = 1,
+                           cluster_ranks = 7,
+                           model_method = "polynomial",
                            raw_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/filtered/",
                            velocyto_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/velocyto/",
@@ -601,11 +635,14 @@ healthy_lung <- benchmark(project_name = "hLung",
                           SoupX = FALSE,
                           hemo_threshold = 1,
                           resolution = 1, 
+                          cluster_ranks = 3,
                           raw_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/raw/",
                           filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/filtered/",
                           velocyto_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/velocyto/",
                           ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/healthy_lung_ddqc_output.csv",
                           output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis")
+
+
 
 # Healthy PBMC
 healthy_PBMC <- benchmark(project_name = "hPBMC",
@@ -643,14 +680,15 @@ mouse_lung <- benchmark(project_name = "mLung",
                         output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
+
 # PBMC
 mouse_PBMC <- benchmark(project_name = "mPBMC",
                         organism = "Mmus",
                         raw_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/raw/",
                         filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/filtered/",
                         velocyto_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/velocyto/",
-                        ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/ddqc_output/mouse_PBMC_ddqc_output.csv",
-                        output_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/limiric/"
+                        ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/mouse_PBMC_ddqc_output.csv",
+                        output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
 
@@ -663,7 +701,7 @@ tumor_ductal <- benchmark(project_name = "ductal",
                           filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/filtered/",
                           velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/velocyto/",
                           ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_ductal_ddqc_output.csv",
-                          output_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/limiric/")
+                          output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis")
 
 # Glio
 tumor_glio <- benchmark(project_name = "glio",
@@ -672,7 +710,7 @@ tumor_glio <- benchmark(project_name = "glio",
                         filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/filtered/",
                         velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/velocyto/",
                         ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_glio_ddqc_output.csv",
-                        output_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/limiric/"
+                        output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
 # Hodgkin
@@ -683,8 +721,57 @@ tumor_hodgkin <- benchmark(project_name = "hodgkin",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/filtered/",
                            velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/velocyto/",
                            ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_hodgkin_ddqc_output.csv",
-                           output_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/limiric/"
+                           output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
+
+
+
+# Ground truth datasets -----
+
+# HEK293 : apoptotic & healthy 
+# Preprocess (SoupX, DoubletFinder, nf scores) then merge, then create ddqc matrix, then run benchmark with seurat as input
+project_name = "apoptotic"
+organism = "Hsap"
+raw_path = "/home/alicen/Projects/limiric/test_data/ground_truth/apoptotic/raw/"
+filtered_path = "/home/alicen/Projects/limiric/test_data/ground_truth/apoptotic/filtered/"
+velocyto_path = "/home/alicen/Projects/limiric/test_data/ground_truth/apoptotic/velocyto/"
+apoptotic <- seurat
+
+project_name = "HEK293_control"
+organism = "Hsap"
+raw_path = "/home/alicen/Projects/limiric/test_data/ground_truth/healthy/raw/"
+filtered_path = "/home/alicen/Projects/limiric/test_data/ground_truth/healthy/filtered/"
+velocyto_path = "/home/alicen/Projects/limiric/test_data/ground_truth/healthy/velocyto/"
+HEK293_control <- seurat
+
+project_name = "pro_apoptotic"
+organism = "Hsap"
+raw_path = "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/raw/"
+filtered_path = "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/filtered/"
+velocyto_path = "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/velocyto/"
+pro_apoptotic <- seurat
+
+# Run the Seurat merge function for apoptotic and live control
+HEK293_apo_live <- merge(
+  x = apoptotic,
+  y = HEK293_control,
+  add.cell.ids = c("apoptotic", "control"),  
+  project = "HEK293"
+) # Run through benchmark with 3 cluster ranks for limiric, 1D miQC
+ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/apoptotic_ddqc_output.csv"
+
+# Same for pro-apoptotic and control sample
+HEK293_proapo_live <- merge(
+  x = pro_apoptotic,
+  y = HEK293_control,
+  add.cell.ids = c("pro_apoptotic", "control"),  
+  project = "HEK293"
+)
+
+ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/apoptotic_ddqc_output.csv"
+
+
+
 
 
 
