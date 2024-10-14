@@ -3,7 +3,7 @@
 # Load libraries -------
 
 packages <- c("cowplot", "devtools", "dplyr", "ggplot2", "glmGamPoi", "Matrix", "robustbase",
-              "png", "Seurat", "SoupX", "DoubletFinder", "tidyr", "DoubletFinder",
+              "png", "Seurat", "SoupX", "DoubletFinder", "tidyr", "DoubletFinder", "biomaRt",
               "limiric", "miQC", "SingleCellExperiment",
               "scuttle", "presto", "valiDrops", "DropletQC")
 
@@ -121,6 +121,12 @@ benchmark <- function(
   
   message("Doublet Finder running...")
   
+  # Manual ground truth without raw data
+  # seurat <- SA928_dead_live 
+  # seurat <- SA928_dying_live
+  # seurat <- SA604_dead_live 
+  # seurat <- JoinLayers(seurat)
+  
   # Prepare seurat object (required) for DropletQC
   seurat_DF <- NormalizeData(seurat, verbose = FALSE) %>%
     FindVariableFeatures(verbose = FALSE) %>%
@@ -146,6 +152,7 @@ benchmark <- function(
     dplyr::filter(BCmetric == max(BCmetric)) %>%
     dplyr::select(pK)
   pK <- as.numeric(as.character(pK[[1]]))
+  
   
   # Homotypic Doublet Proportion Estimate
   annotations <- seurat_DF@meta.data$seurat_clusters
@@ -327,7 +334,8 @@ benchmark <- function(
   best_model_type <- names(which.min(combined_ranks))
 
   if (!is.null(model_method)) {best_model_type <- model_method}
- 
+  # best_model_type <- "linear"
+  
   # Susbet based on model 
   sce_subset <- filterCells(sce, results[[best_model_type]]$model) 
   
@@ -504,6 +512,9 @@ benchmark <- function(
   
   # Return output -------
   
+  # For manual methods where DropletQC couldn't be performed
+  # seurat$DropletQC <- "cell"
+  
   final_df <- summarise_results(seurat)
 
   write.csv(final_df, 
@@ -518,7 +529,9 @@ benchmark <- function(
   # Plot the output -------
   
   # Call helper function
-  plot <- BenchPlot(seurat, paste0(output_path, "/", project_name, ".png"), organism)
+  plot <- BenchPlot(seurat, 
+                    output_file = paste0(output_path, "/", project_name, ".png"), 
+                    organism)
   
   
   # Global environment output 
@@ -766,14 +779,104 @@ HEK293_proapo_live <- merge(
   y = HEK293_control,
   add.cell.ids = c("pro_apoptotic", "control"),  
   project = "HEK293"
-)
-
-ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/apoptotic_ddqc_output.csv"
-
+) # Linear miQC
+ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/pro_apoptotic_ddqc_output.csv"
 
 
+# Other ground truth dataset -----
+
+# TENX049_SA928_001_sceset
+dead_SA928 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_003_sceset_v3_raw.rds")
+dead_SA928 <- as.Seurat(dead_SA928) 
+
+dying_SA928 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_002_sceset_v3_raw.rds")
+dying_SA928 <- as.Seurat(dying_SA928)
+
+live_SA928 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_001_sceset_v3_raw.rds")
+live_SA928 <- as.Seurat(live_SA928)
 
 
+# SA604 ground truth datasets 
+live_SA604_rep2 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_002_sceset_v3_raw.rds")
+live_SA604_rep2 <- as.Seurat(live_SA604_rep2)
+dead_SA604 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_004_sceset_v3_raw.rds")
+dead_SA604 <- as.Seurat(dead_SA604)
+
+
+# Function to edit meta.data columns to correct gene names 
+
+edit_metadata <- function(dataset) {
+  
+  # Edit the column names -----
+  dataset@meta.data <- dataset@meta.data[, c("cell_status", "id", "nCount_originalexp", "nFeature_originalexp")]
+  
+  # Edit the genes from ensembl to hgnc -----
+  
+  # Correct gene symbols to recognizable format 
+  dataset@assays$RNA <- dataset@assays$originalexp
+  countsData <- dataset@assays$RNA$counts
+  
+  # Create Emsembl to HGNC gene naming map 
+  ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
+  bm <- getBM(attributes = c("ensembl_gene_id", "hgnc_symbol"), 
+              values = rownames(countsData), 
+              mart = ensembl)
+  
+  # Perform mapping
+  hgnc.symbols <- bm$hgnc_symbol[match(rownames(countsData), bm$ensembl_gene_id)] # matching ENSG0... genes to gene names like DUX4
+  countsData <- as.matrix(countsData)
+  rownames(countsData) <- hgnc.symbols
+  
+  # Remove empty and duplicated rows 
+  countsData <- countsData[!is.na(rownames(countsData)), ]
+  countsData <- countsData[(rownames(countsData) != ""), ]
+  countsData <- countsData[unique(rownames(countsData)), ]
+  
+  length(rownames(countsData))
+  length(unique(rownames(countsData)))
+  
+  dataset <- CreateSeuratObject(counts = countsData, 
+                                project = "groundtruth")
+  
+  return(dataset)
+}
+
+dead_SA928 <- edit_metadata(dead_SA928)
+dying_SA928 <- edit_metadata(dying_SA928)
+live_SA928 <- edit_metadata(live_SA928)
+live_SA604_rep2 <- edit_metadata(live_SA604_rep2)
+dead_SA604 <- edit_metadata(dead_SA604)
+
+# Merge relevant samples 
+# SA928 dead & live 
+SA928_dead_live <- merge(
+  x = dead_SA928,
+  y = live_SA928,
+  add.cell.ids = c("dead", "live"),  
+  project = "SA928"
+) #  miQC
+project_name = "SA928_dead_live"
+ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/SA928_dead_ddqc_output.csv"
+
+# SA928 dying & live 
+SA928_dying_live <- merge(
+  x = dying_SA928,
+  y = live_SA928,
+  add.cell.ids = c("dying", "live"),  
+  project = "SA928"
+) #  miQC
+project_name = "SA928_dying_live"
+ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/SA928_dying_ddqc_output.csv"
+
+# SA604 dead & live 
+SA604_dead_live <- merge(
+  x = dead_SA604,
+  y = live_SA604_rep2,
+  add.cell.ids = c("dead", "live"),  
+  project = "SA604"
+) #  miQC
+project_name = "SA604_dead_live"
+ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/SA604_dead_ddqc_output.csv"
 
 
 
