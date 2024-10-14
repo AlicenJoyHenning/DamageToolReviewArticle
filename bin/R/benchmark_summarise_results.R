@@ -13,7 +13,7 @@ summarise_results <- function(seurat){
     }
 
   # List of methods
-  methods <- c("threshold", "limiric", "DropletQC", "miQC", "valiDrops", "ddqc")
+  methods <- c("ddqc", "DropletQC", "limiric", "miQC", "valiDrops", "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
 
   # Calculate percentages for each method and store in a list
   percentages_list <- lapply(methods, function(method) {
