@@ -93,10 +93,15 @@ BenchPlot <- function(seurat, output_file, organism) {
   # Transfer labels 
   seurat_view$limiric <- seurat$limiric
   seurat_view$DropletQC <- seurat$DropletQC
-  seurat_view$Seurat <- seurat$threshold
   seurat_view$miQC <-  seurat$miQC
   seurat_view$valiDrops <- seurat$valiDrops
   seurat_view$ddqc <- seurat$ddqc
+  seurat_view$manual_all <- seurat$manual_all
+  seurat_view$manual_mito_ribo <- seurat$manual_mito_ribo
+  seurat_view$manual_mito <- seurat$manual_mito
+  seurat_view$manual_mito_isolated <- seurat$manual_mito_isolated
+  seurat_view$manual_malat1 <- seurat$manual_malat1
+  
   
   # Create tSNE plots
   plots3 <- lapply(methods, function(method) {
@@ -107,9 +112,9 @@ BenchPlot <- function(seurat, output_file, organism) {
   })
   
   # Combine plots ------
-  combined_plot1 <- plot_grid(plotlist = plots1, ncol = 6, rel_heights = c(1, 1))
-  combined_plot2 <- plot_grid(plotlist = plots2, ncol = 6, rel_heights = c(1, 1))
-  combined_plot3 <- plot_grid(plotlist = plots3, ncol = 6, rel_heights = c(1, 1))
+  combined_plot1 <- plot_grid(plotlist = plots1, ncol = 10, rel_heights = c(1, 1))
+  combined_plot2 <- plot_grid(plotlist = plots2, ncol = 10, rel_heights = c(1, 1))
+  combined_plot3 <- plot_grid(plotlist = plots3, ncol = 10, rel_heights = c(1, 1))
   
   combined_plot <- plot_grid(
     combined_plot1, combined_plot2, combined_plot3,
@@ -123,7 +128,7 @@ BenchPlot <- function(seurat, output_file, organism) {
     )
   
   # Save the plot
-  ggsave(output_file, combined_plot, width = 24, height = 10, units = "in", dpi = 300)
+  ggsave(output_file, combined_plot, width = 36, height = 10, units = "in", dpi = 300, limitsize = FALSE)
   
   return(combined_plot)
   
