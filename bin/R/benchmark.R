@@ -1,4 +1,4 @@
-# Script to run manual and tool-based methods for each ground truth and non-ground truth datasets
+# Script to run manual and tool-based damaged cell detection for non-ground truth datasets
 
 # Load libraries -------
 
