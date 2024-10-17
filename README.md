@@ -6,16 +6,16 @@ This repository contains the workflow, direct analysis code, and original data (
 
 
 ### Repository Overview
-🟢[  Analysis Overview](#-analysis-overview) <br> 
-🔵[  Analysis Scripts](#-analysis-scripts) <br>
+⚪[  Analysis Overview](#-analysis-overview) <br> 
+⚪[  Analysis Scripts](#-analysis-scripts) <br>
 ⚪[  Data Availability](#-data-availability)   
 
 <br>
 
 
-## 🟢 Analysis Overview
+## ⚪ Analysis Overview
 
-## 🔵 Analysis Scripts
+## ⚪ Analysis Scripts
 Details for running each script are outlined here as well as within the script as comments.
 <br>
 <br>
