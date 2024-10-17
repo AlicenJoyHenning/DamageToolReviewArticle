@@ -6,9 +6,7 @@ This repository contains the workflow, direct analysis code, and original data (
 
 
 ### Repository Overview
-⚪[  Analysis Overview](#-analysis-overview) <br> 
-⚪[  Analysis Scripts](#-analysis-scripts) <br>
-⚪[  Data Availability](#-data-availability)   
+⚪[  Analysis Overview](#-analysis-overview) | ⚪[  Analysis Scripts](#-analysis-scripts) | ⚪[  Data Availability](#-data-availability)   
 
 <br>
 
