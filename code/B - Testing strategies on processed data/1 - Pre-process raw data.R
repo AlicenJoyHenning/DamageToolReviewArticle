@@ -1,12 +1,12 @@
 # SCRIPT CONTEXT 
 #
-# Ddqc is a python based tool. To keep tool comparisions as similar as possible, 
-# the processed counts are generated as they would be for the other tools, and 
-# then saved as a csv file to be used as input for ddqc. 
+# To keep tool comparisions as similar as possible, the processed counts are generated 
+# first before input into tool testing. This is NB for tools not run in R, ddqc, so 
+# standard input count matrices can be generated as a csv file. 
 # 
 # Note: 
-# After running this script, the user will need to run the ddqc tool in python.
-# (ii - Run ddqc.ipynb)
+#1. After running this script, the user will need to run the ddqc tool in python.
+#     (ii - Run ddqc.ipynb)
 
 
 #-------------------------------------------------------------------------------
