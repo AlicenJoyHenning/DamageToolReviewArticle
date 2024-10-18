@@ -13,7 +13,7 @@ This repository contains the workflow, direct analysis code, and original data (
 
 ## ⚪ Analysis Overview
 
-![Alt text](https://github.com/AlicenJoyHenning/DamageToolReviewArticle/blob/main/Images/workflow-removebg-preview.png)
+![Alt text](https://github.com/AlicenJoyHenning/DamageToolReviewArticle/blob/main/Images/study_workflow.png)
 
 ## ⚪ Analysis Scripts
 Details for running each script are outlined here as well as within the script as comments.
