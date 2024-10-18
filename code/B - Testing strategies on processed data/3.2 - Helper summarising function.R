@@ -1,5 +1,14 @@
+# SCRIPT CONTEXT 
+#
+# Helper function for the benchmarking pipeline to summarise the output of benchmark function (3 - Run remaining detection strategies)
+# Calculates the percentage of damaged cells detected for each tool. 
+
+
+#-------------------------------------------------------------------------------
+# HELPER FUNCTION DEFINED 
+#-------------------------------------------------------------------------------
+
 # Helper function for benchmarking 
-# Outputs a dataframe that gives percentage of dead cells for each method
 
 summarise_results <- function(seurat){
   

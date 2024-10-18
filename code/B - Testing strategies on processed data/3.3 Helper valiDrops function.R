@@ -1,6 +1,19 @@
+# SCRIPT CONTEXT 
+#
+# Usually damaged detection comes as last step in process of uploading raw data, identifying empty droplets etc. 
+# but since we're only interested in comparing dead/damaged cells, we're only going to benchmark 
+# the ability of this function. 
+#
+# Therefore, this script contains a helper function for the benchmarking pipeline to alter the input
+# allowed for the default valiDrops function to be the same as for all the other tools compared 
+# in the pipeline. (3 - Run remaining detection strategies). 
+
+
+#-------------------------------------------------------------------------------
+# HELPER FUNCTION DEFINED 
+#-------------------------------------------------------------------------------
+
 # Source script for valiDrops label_dead function
-# Usually comes as last step in process of uploading raw data, identifying empty droplets etc. but since 
-# I'm only interested in comparing dead/damaged cells, I'm only going to benchmark this function 
 
 label_dead <- function(
     counts, 

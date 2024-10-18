@@ -1,4 +1,36 @@
-# Script to run manual and tool-based methods for each ground truth and non-ground truth datasets
+# SCRIPT CONTEXT 
+#
+# Benchmarking damaged cell detection tools. First, input raw files are
+# processed. Then, the ten damaged strategies are applied to each
+# processed count matrix to obtain output damaged labels for each cell barcode.
+# For all methods, this will either be 'damaged' or 'cell'.
+#
+# Notes: 
+# 1. The function requires ddqc output from python to have been generated 
+#     (i - Prepare ddqc input.R) and (ii - Run ddqc.ipynb)
+#    
+# 2. Ground truth cases are different to non ground truth cases. Each ground truth sample 
+#    for testing damaged detection strategies includes two separately sequenced samples, 
+#    one for treated & sorted dead cells and the other for untreated, sorted live cells. 
+#
+#    For damaged cell detection, the count matrices of the damaged and control 
+#    samples are merged and integrated to resemble 'one psuedosample'. This simply
+#    concatenates the count matrices without losing their original labels. The 
+#    integration serves only for downstream clustering and visualisation, the 
+#    original (processed) count matrices for each sample are used of tool testing. 
+#
+#    
+# 3. Absent data from ground truth
+#    The second ground truth dataset has only processed count matrices available,
+#    so raw counts or velocyto counts are absent. This means SoupX ambient RNA
+#    correction cannot be performed for the samples. It also means that there is 
+#    no velocyto output for calculating nuclear fraction required by DropletQC. 
+#    These limitations prevented the testing of DropletQC.
+
+
+#-------------------------------------------------------------------------------
+# PREPARATIONS
+#-------------------------------------------------------------------------------
 
 # Load libraries -------
 
@@ -13,6 +45,11 @@ for (pkg in packages) {
   }
 }
 
+
+#-------------------------------------------------------------------------------
+# FUNCTION DEFINED 
+#-------------------------------------------------------------------------------
+
 # Function for main benchmarking ------
 
 benchmark <- function(
@@ -22,7 +59,8 @@ benchmark <- function(
     cluster_ranks = 1,   # Adjustable
     hemo_threshold = 50, # Adjustable
     SoupX = TRUE,        # TRUE or FALSE 
-    model_method = NULL, # Adjustable, alternative to specify the model type "linear", "spline", "polynomial", or "one_dimensional"
+    model_method = NULL, # Adjustable, alternative to specify the model type "linear", "spline", "polynomial", or 
+"one_dimensional"
     raw_path,            # path to .gz raw output of STARsolo
     filtered_path,       # path to .gz filtered output of STARsolo
     velocyto_path,       # path to .gz velocyto output of STARsolo
@@ -37,10 +75,10 @@ benchmark <- function(
   
   # SoupX Correction -------
   
-  
   if (SoupX)  {
     
-    # Using Seurat read in the matrices from the STARsolo output for filtered (TOC) and raw (TOD) counts  (must be zipped input files)
+    # Using Seurat read in the matrices from the STARsolo output for filtered (TOC) and raw (TOD) counts  (must be 
+zipped input files)
     table_of_counts <- suppressWarnings(Read10X(filtered_path))
     
     # Only reading in if necessary  
@@ -52,7 +90,8 @@ benchmark <- function(
     # Estimate the contamination
     sc <- estimateSoup(sc)
     
-    # Use Seurat to cluster the filtered matrix, although not essential it is recommended to get better estimations
+    # Use Seurat to cluster the filtered matrix, although not essential it is recommended to get better 
+estimations
     seurat_soup <- suppressWarnings(CreateSeuratObject(table_of_counts, min.cells = 10))
     seurat_soup <- suppressWarnings(SCTransform(seurat_soup, verbose = FALSE) %>%
                                       RunPCA(verbose = FALSE) %>%
@@ -66,7 +105,8 @@ benchmark <- function(
     sc <- suppressWarnings(setClusters(sc, setNames(meta.data$seurat_clusters, rownames(meta.data))))
     sc <- suppressWarnings(setDR(sc, umap.embedding, c("UMAP_1", "UMAP_2")))
     
-    # With defined clusters, run the main SoupX function to calculate the contamination fraction rho where rho E (0, 1) and the closer to 1, the more contaminated
+    # With defined clusters, run the main SoupX function to calculate the contamination fraction rho where rho E 
+(0, 1) and the closer to 1, the more contaminated
     sc <- autoEstCont(sc, verbose = FALSE, doPlot = FALSE)
     rho_estimate <- sc$metaData$rho[1] # record the rho in PreProcess output
     
@@ -103,7 +143,8 @@ benchmark <- function(
   
   else {
     
-    # Using Seurat read in the matrices from the STARsolo output for filtered (TOC) and raw (TOD) counts  (must be zipped input files)
+    # Using Seurat read in the matrices from the STARsolo output for filtered (TOC) and raw (TOD) counts  (must be 
+zipped input files)
     table_of_counts <- suppressWarnings(Read10X(filtered_path))
     
     seurat <- CreateSeuratObject(counts = table_of_counts, 
@@ -115,7 +156,6 @@ benchmark <- function(
     message("\u2714 ", cell_number, " cells detected, ambient correction skipped")
     
   }
-  
   
   # DoubletFinder filtering ------
   
@@ -136,12 +176,14 @@ benchmark <- function(
     FindClusters(verbose = FALSE) %>%
     RunUMAP(dims = 1:10, verbose = FALSE)
   
-  # Open a connection to a temporary file for writing (output of DoubletFinder is RIDICULOUSLY verbose but lacks the ability to quieten it)
+  # Open a connection to a temporary file for writing (output of DoubletFinder is RIDICULOUSLY verbose but lacks 
+the ability to quieten it)
   tmp_conn <- file(tempfile(), open = "wt")
   
   # Redirect standard output and messages to the temporary file
   sink(tmp_conn)
   sink(tmp_conn, type = "message")
+  
   
   # pK Identification (no ground-truth)
   sweep.res.list <- paramSweep(seurat_DF, PCs = 1:10, sct = FALSE)
@@ -157,7 +199,8 @@ benchmark <- function(
   # Homotypic Doublet Proportion Estimate
   annotations <- seurat_DF@meta.data$seurat_clusters
   homotypic.prop <- modelHomotypic(annotations)
-  nExp_poi <- round(0.075 * nrow(seurat_DF@meta.data))  # Assuming 7.5% doublet formation rate (can be changed for dataset specificity)
+  nExp_poi <- round(0.075 * nrow(seurat_DF@meta.data))  # Assuming 7.5% doublet formation rate (can be changed for 
+dataset specificity)
   nExp_poi.adj <- round(nExp_poi * (1 - homotypic.prop))
   nExp_poi.adj <- nExp_poi.adj - (nExp_poi.adj * (1 / 7))
   
@@ -184,6 +227,7 @@ benchmark <- function(
   doublet_classifications <- seurat_DF@meta.data[[df_col_name]]
   seurat$DF <- doublet_classifications
   
+  message("Done")
   
   # Tool 1: DropletQC (needs original count matrix) ------
   
@@ -211,7 +255,8 @@ benchmark <- function(
     project   = "unspliced"))
   
   # Calculate nuclear fraction
-  ExonSum   <- Matrix::colSums(spliced[['RNA']]$counts)   # summing over all the genes for each cell (1 reading per cell)
+  ExonSum   <- Matrix::colSums(spliced[['RNA']]$counts)   # summing over all the genes for each cell (1 reading 
+per cell)
   IntronSum <- Matrix::colSums(unspliced[['RNA']]$counts)
   NuclearFraction <- IntronSum / (ExonSum + IntronSum)
   nf <- data.frame(barcode = rownames(unspliced@meta.data), nf = NuclearFraction)
@@ -237,7 +282,8 @@ benchmark <- function(
   edresultsDf <- identify_empty_drops(edDf)
   
   # Identify damaged cells
-  # Create vector of length same as cell number (runs default with no adjustment on groups of cells, need to fill this column requirement while getting results for that sample as a whole)
+  # Create vector of length same as cell number (runs default with no adjustment on groups of cells, need to fill 
+this column requirement while getting results for that sample as a whole)
   n_cells <- length(Cells(seurat))
   cell_type <- rep(1, n_cells)
   
@@ -359,7 +405,8 @@ benchmark <- function(
                                         species = species)
   
   
-  # Run valiDrops damaged detection (label_dead valiDrops function edited to allow for this input, not previous ValiDrop input)
+  # Run valiDrops damaged detection (label_dead valiDrops function edited to allow for this input, not previous 
+ValiDrop input)
   valiDrops <- label_dead(counts = expression_matrix, 
                           metrics = expression_metrics$metrics)
   
@@ -370,15 +417,6 @@ benchmark <- function(
   
   
   # Tool 5: ddqc -------
-  
-  # Create output to run in python
-  # ddqc_counts <- seurat@assays$RNA$counts
-  # ddqc <- CreateSeuratObject(counts = ddqc_counts, assay = "RNA", min.cells = 1)
-  # mtx <- suppressWarnings(as.matrix(ddqc@assays$RNA$counts))
-  # write.csv(mtx, file = paste0(output_path, "/ddqc/input/", project_name, "_ddqc_matrix_data.csv"))
-
-  
-  # cat("\u2714  Input for ddqc prepared \n")
   
   # Read in ddqc results 
   ddqc_results <- read.csv2(ddqc_path, sep = ',')
@@ -454,7 +492,8 @@ benchmark <- function(
     
   }
     
-  # Manual 1: All multivariate outliers (robustbase): UMI and feature counts & mitochondrial, ribosomal and MALAT1 percentages -------
+  # Manual 1: All multivariate outliers (robustbase): UMI and feature counts & mitochondrial, ribosomal and MALAT1 
+percentages -------
   
   # Define input df, run outlier detection, and add to Seurat meta data 
   manual1_df <- seurat_df[, c("nCount_RNA", "nFeature_RNA", "mito.ratio", "ribo.ratio", "malat1.ratio")]
@@ -464,7 +503,8 @@ benchmark <- function(
   # Correct for NA if needed
   seurat$manual_all <- ifelse(is.na(seurat$manual_all), "cell", seurat$manual_all)
   
-  # Manual 2: Mito/Ribo multivariate outliers (robustbase): UMI and feature counts & mitochondrial and ribosomal percentages -------
+  # Manual 2: Mito/Ribo multivariate outliers (robustbase): UMI and feature counts & mitochondrial and ribosomal 
+percentages -------
   
   manual2_df <- seurat_df[, c("nCount_RNA", "nFeature_RNA", "mito.ratio", "ribo.ratio")]
   manual2_results <- identify_moutliers(manual2_df)
@@ -543,9 +583,12 @@ benchmark <- function(
   
 }
 
+#-------------------------------------------------------------------------------
+# FUNCTION RUN 
+#-------------------------------------------------------------------------------
 
 # Run the function on 15 non-groundtruth datasets 
-# Run the bench mark function on each dataset 
+# Note differences in the ground truth cases! 
 
 # 3 Cell line -------
 
@@ -557,7 +600,8 @@ cellline_A549 <- benchmark(project_name = "A549",
                            raw_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/filtered/",
                            velocyto_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/velocyto/",
-                           ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/cellline_A549_ddqc_output.csv",
+                           ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/cellline_A549_ddqc_output.csv",
                            output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -568,7 +612,8 @@ cellline_HCT116 <- benchmark(project_name = "HCT116",
                              raw_path = "/home/alicen/Projects/limiric/test_data/cellline_HCT-116/raw/",
                              filtered_path = "/home/alicen/Projects/limiric/test_data/cellline_HCT-116/filtered/",
                              velocyto_path = "/home/alicen/Projects/limiric/test_data/cellline_HCT-116/velocyto/",
-                             ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/cellline_HCT-116_ddqc_output.csv",
+                             ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/cellline_HCT-116_ddqc_output.csv",
                              output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -582,7 +627,8 @@ cellline_jurkat <- benchmark(project_name = "jurkat",
                              raw_path = "/home/alicen/Projects/limiric/test_data/cellline_jurkat/raw/",
                              filtered_path = "/home/alicen/Projects/limiric/test_data/cellline_jurkat/filtered/",
                              velocyto_path = "/home/alicen/Projects/limiric/test_data/cellline_jurkat/velocyto/",
-                             ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/cellline_jurkat_ddqc_output.csv",
+                             ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/cellline_jurkat_ddqc_output.csv",
                              output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -597,7 +643,8 @@ diseased_liver <- benchmark(project_name = "dLiver",
                             raw_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/raw/",
                             filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/filtered/",
                             velocyto_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/velocyto/",
-                            ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/diseased_liver_ddqc_output.csv",
+                            ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/diseased_liver_ddqc_output.csv",
                             output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -608,7 +655,8 @@ diseased_lung <- benchmark(project_name = "dLung",
                            raw_path = "/home/alicen/Projects/limiric/test_data/diseased_lung/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_lung/filtered/",
                            velocyto_path = "/home/alicen/Projects/limiric/test_data/diseased_lung/velocyto/",
-                           ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/diseased_lung_ddqc_output.csv",
+                           ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/diseased_lung_ddqc_output.csv",
                            output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -621,7 +669,8 @@ diseased_PBMC <- benchmark(project_name = "dPBMC",
                            raw_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/filtered/",
                            velocyto_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/velocyto/",
-                           ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/diseased_PBMC_ddqc_output.csv",
+                           ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/diseased_PBMC_ddqc_output.csv",
                            output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -638,7 +687,8 @@ healthy_liver <- benchmark(project_name = "hLiver",
                            raw_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/filtered/",
                            velocyto_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/velocyto/",
-                           ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/healthy_liver_ddqc_output.csv",
+                           ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/healthy_liver_ddqc_output.csv",
                            output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -652,7 +702,8 @@ healthy_lung <- benchmark(project_name = "hLung",
                           raw_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/raw/",
                           filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/filtered/",
                           velocyto_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/velocyto/",
-                          ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/healthy_lung_ddqc_output.csv",
+                          ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/healthy_lung_ddqc_output.csv",
                           output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis")
 
 
@@ -663,7 +714,8 @@ healthy_PBMC <- benchmark(project_name = "hPBMC",
                           raw_path = "/home/alicen/Projects/limiric/test_data/healthy_PBMC/raw/",
                           filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_PBMC/filtered/",
                           velocyto_path = "/home/alicen/Projects/limiric/test_data/healthy_PBMC/velocyto/",
-                          ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/healthy_PBMC_ddqc_output.csv",
+                          ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/healthy_PBMC_ddqc_output.csv",
                           output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -678,7 +730,8 @@ mouse_liver <- benchmark(project_name = "mLiver",
                          raw_path = "/home/alicen/Projects/limiric/test_data/mouse_liver/raw/",
                          filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_liver/filtered/",
                          velocyto_path = "/home/alicen/Projects/limiric/test_data/mouse_liver/velocyto/",
-                         ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/mouse_liver_ddqc_output.csv",
+                         ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/mouse_liver_ddqc_output.csv",
                          output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -689,7 +742,8 @@ mouse_lung <- benchmark(project_name = "mLung",
                         raw_path = "/home/alicen/Projects/limiric/test_data/mouse_lung/raw/",
                         filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_lung/filtered/",
                         velocyto_path = "/home/alicen/Projects/limiric/test_data/mouse_lung/velocyto/",
-                        ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/mouse_lung_ddqc_output.csv",
+                        ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/mouse_lung_ddqc_output.csv",
                         output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -700,7 +754,8 @@ mouse_PBMC <- benchmark(project_name = "mPBMC",
                         raw_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/raw/",
                         filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/filtered/",
                         velocyto_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/velocyto/",
-                        ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/mouse_PBMC_ddqc_output.csv",
+                        ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/mouse_PBMC_ddqc_output.csv",
                         output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -713,7 +768,8 @@ tumor_ductal <- benchmark(project_name = "ductal",
                           raw_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/raw/",
                           filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/filtered/",
                           velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/velocyto/",
-                          ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_ductal_ddqc_output.csv",
+                          ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_ductal_ddqc_output.csv",
                           output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis")
 
 # Glio
@@ -722,7 +778,8 @@ tumor_glio <- benchmark(project_name = "glio",
                         raw_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/raw/",
                         filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/filtered/",
                         velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/velocyto/",
-                        ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_glio_ddqc_output.csv",
+                        ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_glio_ddqc_output.csv",
                         output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -733,7 +790,8 @@ tumor_hodgkin <- benchmark(project_name = "hodgkin",
                            raw_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/filtered/",
                            velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/velocyto/",
-                           ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_hodgkin_ddqc_output.csv",
+                           ddqc_path = 
+"/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_hodgkin_ddqc_output.csv",
                            output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
 )
 
@@ -742,7 +800,8 @@ tumor_hodgkin <- benchmark(project_name = "hodgkin",
 # Ground truth datasets -----
 
 # HEK293 : apoptotic & healthy 
-# Preprocess (SoupX, DoubletFinder, nf scores) then merge, then create ddqc matrix, then run benchmark with seurat as input
+# Preprocess (SoupX, DoubletFinder, nf scores) then merge, then create ddqc matrix, then run benchmark with seurat 
+as input
 project_name = "apoptotic"
 organism = "Hsap"
 raw_path = "/home/alicen/Projects/limiric/test_data/ground_truth/apoptotic/raw/"
@@ -763,6 +822,26 @@ raw_path = "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/ra
 filtered_path = "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/filtered/"
 velocyto_path = "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/velocyto/"
 pro_apoptotic <- seurat
+
+# Getting damaged cells in isolation first 
+
+# Preprocess (SoupX, DoubletFinder, nf scores) 
+project_name <- "apoptotic"
+organism <- "Hsap"
+raw_path <- "/home/alicen/Projects/limiric/test_data/ground_truth/apoptotic/raw/"
+apoptotic <- seurat
+saveRDS(apoptotic, 
+        "/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/apoptotic_isolated.rds")
+
+
+project_name <- "pro_apoptotic"
+organism <- "Hsap"
+filtered_path <- "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/filtered/"
+pro_apoptotic <- seurat
+saveRDS(pro_apoptotic, 
+"/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/pro_apoptotic_isolated.rds")
+
+
 
 # Run the Seurat merge function for apoptotic and live control
 HEK293_apo_live <- merge(
@@ -785,26 +864,28 @@ ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/outp
 
 # Other ground truth dataset -----
 
-# TENX049_SA928_001_sceset
-dead_SA928 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_003_sceset_v3_raw.rds")
+# SA928 ground truth dataset
+dead_SA928 <- 
+readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_003_sceset_v3_raw.rds")
 dead_SA928 <- as.Seurat(dead_SA928) 
-
-dying_SA928 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_002_sceset_v3_raw.rds")
+dying_SA928 <- 
+readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_002_sceset_v3_raw.rds")
 dying_SA928 <- as.Seurat(dying_SA928)
-
-live_SA928 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_001_sceset_v3_raw.rds")
+live_SA928 <- 
+readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_001_sceset_v3_raw.rds")
 live_SA928 <- as.Seurat(live_SA928)
 
 
-# SA604 ground truth datasets 
-live_SA604_rep2 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_002_sceset_v3_raw.rds")
+# SA604 ground truth dataset
+live_SA604_rep2 <- 
+readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_002_sceset_v3_raw.rds")
 live_SA604_rep2 <- as.Seurat(live_SA604_rep2)
-dead_SA604 <- readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_004_sceset_v3_raw.rds")
+dead_SA604 <- 
+readRDS("/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_004_sceset_v3_raw.rds")
 dead_SA604 <- as.Seurat(dead_SA604)
 
 
-# Function to edit meta.data columns to correct gene names 
-
+# Above processed files (Zenodo) have non-conventional gene names that need to be changed
 edit_metadata <- function(dataset) {
   
   # Edit the column names -----
@@ -823,7 +904,8 @@ edit_metadata <- function(dataset) {
               mart = ensembl)
   
   # Perform mapping
-  hgnc.symbols <- bm$hgnc_symbol[match(rownames(countsData), bm$ensembl_gene_id)] # matching ENSG0... genes to gene names like DUX4
+  hgnc.symbols <- bm$hgnc_symbol[match(rownames(countsData), bm$ensembl_gene_id)] # matching ENSG0... genes to 
+gene names like DUX4
   countsData <- as.matrix(countsData)
   rownames(countsData) <- hgnc.symbols
   
@@ -847,47 +929,195 @@ live_SA928 <- edit_metadata(live_SA928)
 live_SA604_rep2 <- edit_metadata(live_SA604_rep2)
 dead_SA604 <- edit_metadata(dead_SA604)
 
-# Merge relevant samples 
-# SA928 dead & live 
-SA928_dead_live <- merge(
-  x = dead_SA928,
-  y = live_SA928,
-  add.cell.ids = c("dead", "live"),  
-  project = "SA928"
-) #  miQC
-project_name = "SA928_dead_live"
-ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/SA928_dead_ddqc_output.csv"
 
-# SA928 dying & live 
-SA928_dying_live <- merge(
-  x = dying_SA928,
-  y = live_SA928,
-  add.cell.ids = c("dying", "live"),  
-  project = "SA928"
-) #  miQC
-project_name = "SA928_dying_live"
-ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/SA928_dying_ddqc_output.csv"
+# Function to merge, integrate, and visualise groups 
+merge_and_see <- function(input_list = SA928, 
+                          mtrb_reduce = FALSE,
+                          sample_IDs = c("live", "dying", "dead"),
+                          project_name = "SA928",
+                          output_dir = "/home/alicen/Projects/limiric/groundtruth/R_objects/"
+){
+  
+  # Merge the samples (accounting for # of samples)
+  
+  # Check if input_list and sample_IDs have the same length
+  if (length(input_list) != length(sample_IDs)) {
+    stop("The length of input_list and sample_IDs must be the same.")
+  }
+  
+  # Initialize the merged object with the first element
+  first_obj <- input_list[[1]]
+  
+  # Loop through the rest of the elements to create their own list 
+  remaining_objs <- list()
+  
+  for (i in 2:length(input_list)) {
+    remaining_objs[[(i-1)]] <- input_list[[i]]
+  }
+  
+  # Convert the list to the required format
+  remaining_objs <- do.call(c, remaining_objs)
+  
+  # Run the Seurat merge function
+  merged_obj <- merge(
+    x = first_obj,
+    y = remaining_objs,
+    add.cell.ids = sample_IDs,  
+    project = project_name 
+  )
+  
+  
+  if (mtrb_reduce) {
+    
+    # Storage 
+    full_merged_obj <- merged_obj
+    
+    # Reduce based on mt & rb genes only (this occurs in a separate Seurat object (limiric))
+    merged_obj <- subset(merged_obj, features = intersect(mt_rb_genes, rownames(merged_obj@assays$RNA)))
+    
+    
+  }
+  
+  
+  # Attempt to integrate 
+  integrated_obj <- NormalizeData(merged_obj) %>%
+    FindVariableFeatures() %>%
+    ScaleData() %>%
+    RunPCA() %>%
+    IntegrateLayers(method = CCAIntegration, orig.reduction = "pca", new.reduction = "integrated")
+  
+  
+  # re-join layers after integration
+  integrated_obj[["RNA"]] <- JoinLayers(integrated_obj[["RNA"]])
+  
+  # Create meta data column for sample name 
+  integrated_obj$orig.ident <- rownames(integrated_obj@meta.data)
+  integrated_obj$orig.ident <- sub("_.*", "", integrated_obj$orig.ident)
+  
+  
+  
+  
+  # Dimensionality reduction for visualisation (UMAP)
+  seurat <- FindNeighbors(integrated_obj, reduction = "integrated", dims = 1:30) %>%
+    FindClusters(reduction = "integrated", dims = 1:30) %>%
+    RunUMAP(reduction = "integrated", dims = 1:30)
+  
+  
+  # Visualise
+  colours_full <- c("#6C79F0","#A1A9F5","#ADDBB6", "#72BC7B", "#70B1D2","#9FCBE1", "#C5E7A7","#C9AFDF","#9D71B3")
+  
+  # For label consistency with PreProcess plots
+  cells <- length(Cells(seurat))
+  message("Sample ", project_name, " has ", cells, " cells.")
+  
+  plot_clusters <- DimPlot(seurat,
+                           group.by = "orig.ident",
+                           pt.size = 1,
+                           label = TRUE,
+                           label.box = TRUE,
+                           label.size = 5,
+                           label.color = "white",
+                           repel = TRUE) +
+    scale_color_manual(values = colours_full) +
+    scale_fill_manual(values = colours_full) + 
+    NoAxes() + NoLegend() +
+    xlab("UMAP 1") + ylab("UMAP 2") +
+    theme(plot.title = element_text(hjust = 0.5, size = rel(1), face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
+          panel.border = element_rect(colour = "black", fill=NA, linewidth =1))
+  
+  
+  if (mtrb_reduce) {
+    
+    # Define mitochondrial expression
+    seurat$mt.percent <- PercentageFeatureSet(
+      object   = full_merged_obj,
+      features = intersect(mt_genes, rownames(full_merged_obj@assays$RNA)),
+      assay    = "RNA")
+    
+    
+    # Define ribosomal expression
+    seurat$rb.percent <- PercentageFeatureSet(
+      object   = full_merged_obj,
+      features = intersect(rb_genes, rownames(full_merged_obj@assays$RNA)),
+      assay    = "RNA")
+    
+    seurat@assays$RNA <- integrated_obj@assays$RNA
+    
+  }
+  
+  else { 
+    
+    # Define mitochondrial expression
+    seurat$mt.percent <- PercentageFeatureSet(
+      object   = seurat,
+      features = intersect(mt_genes, rownames(seurat@assays$RNA)),
+      assay    = "RNA"
+    )
+    
+    # Define ribosomal expression
+    seurat$rb.percent <- PercentageFeatureSet(
+      object   = seurat,
+      features = intersect(rb_genes, rownames(seurat@assays$RNA)),
+      assay    = "RNA"
+    )
+    
+  }
+  
+  mt_plot <- FeaturePlot(seurat,
+                         pt.size = 1,
+                         features = "mt.percent") +
+    NoAxes() + NoLegend() +
+    xlab("UMAP 1") + ylab("UMAP 2") +
+    theme(plot.title = element_text(hjust = 0.5, size = rel(1), face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
+          panel.border = element_rect(colour = "black", fill=NA, linewidth =1))
+  
+  
+  rb_plot <- FeaturePlot(seurat,
+                         pt.size = 1,
+                         features = "rb.percent") +
+    NoAxes() + NoLegend() +
+    xlab("UMAP 1") + ylab("UMAP 2") +
+    theme(plot.title = element_text(hjust = 0.5, size = rel(1), face = "bold"),
+          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
+          panel.border = element_rect(colour = "black", fill=NA, linewidth =1))
+  
+  
+  plot <- plot_clusters + mt_plot + rb_plot
+  
+  saveRDS(seurat, 
+          paste0(output_dir, project_name, ".rds"))
+  
+  return(list(seurat = seurat,
+              plot = plot))
+  
+}
 
-# SA604 dead & live 
-SA604_dead_live <- merge(
-  x = dead_SA604,
-  y = live_SA604_rep2,
-  add.cell.ids = c("dead", "live"),  
-  project = "SA604"
-) #  miQC
-project_name = "SA604_dead_live"
-ddqc_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis/ddqc/output/SA604_dead_ddqc_output.csv"
+
+# Cases
+SA928_livendead <- list(live_SA928, dead_SA928)
+SA928_livendying <- list(live_SA928, dying_SA928)
+SA604 <- list(live_SA604_rep2, dead_SA604)
+
+# Run
+SA928_livendead <- merge_and_see(SA928_livendead, mtrb_reduce = FALSE, c("live", "dead"), "SA928_livendead")
+SA928_livendying <- merge_and_see(SA928_livendying, mtrb_reduce = FALSE, c("live", "dying"), "SA928_livendying")
+SA604 <- merge_and_see(SA604, mtrb_reduce = FALSE, c("live", "dead"), "SA604_livendead")
+
+# check & save
+SA928_livendead$plot
+DimPlot(SA928_livendead$seurat)
+saveRDS(SA928_livendead$seurat, 
+"/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/SA928_dead_live.rds")
+
+SA928_livendying$plot
+saveRDS(SA928_livendying$seurat, 
+"/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/SA928_dying_live.rds")
 
 
-
-
-
-
-
-
-
-
-
+SA604$plot
+saveRDS(SA604$seurat, "/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/SA604.rds")
 
 
 

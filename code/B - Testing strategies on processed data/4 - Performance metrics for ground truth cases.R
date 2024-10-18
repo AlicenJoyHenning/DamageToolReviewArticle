@@ -1,6 +1,20 @@
-# Ground truth barplots 
-# Context: after gathering output from damage_left_behind_run_methods
+# SCRIPT CONTEXT 
+#
+# Benchmarking damaged cell detection strategies on ground truth dataset. This script begins with the strategies
+# already run on the ground truth cases. The labelled output objects (3 - Run remaining detection strategies.R)
+# are loaded at the start of the script. From here, the script uses the labels stored in the objects to 
+# calculate confusion metrics (TP, TN, FP, FN) for each strategy, followed by sensitivity and F1 scores.
+# The script then plots the sensitivity and F1 scores for each strategy
+# 
+# Still do : 
+# - automated rather than manual confusion metric caculations 
+# - automated precision, recall, PR-AUC calculations 
+# - finalised plots (new aesthetics, labels, etc)
 
+
+#-------------------------------------------------------------------------------
+# PREPARATIONS
+#-------------------------------------------------------------------------------
 
 # Load necessary libraries
 library(ggplot2)
@@ -21,6 +35,9 @@ SA928_dying <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysi
 SA604_dead <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/SA604_dead_live.rds")
 
 
+#-------------------------------------------------------------------------------
+# PERFORMANCE METRICS
+#-------------------------------------------------------------------------------
 
 # Confusion metrics  ----
 

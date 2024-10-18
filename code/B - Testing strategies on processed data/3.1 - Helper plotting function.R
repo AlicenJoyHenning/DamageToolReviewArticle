@@ -1,6 +1,16 @@
-# Plot the labels of each tool according to the three different visualisaitons 
+# SCRIPT CONTEXT 
+#
+# Helper function for the benchmarking pipeline to plot the output of benchmark function 
+# (3 - Run remaining detection strategies)
+# Plots the output labels of each tool according to three different visualisations  
 
 
+
+#-------------------------------------------------------------------------------
+# HELPER FUNCTION DEFINED 
+#-------------------------------------------------------------------------------
+
+# Function for plotting using processed output from the benchmarking pipeline
 BenchPlot <- function(seurat, output_file, organism) {
   
   # Prepare data
