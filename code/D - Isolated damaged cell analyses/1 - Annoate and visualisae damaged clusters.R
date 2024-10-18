@@ -7,8 +7,7 @@
 # 1. The 2 clusters that form in damaged cells when viewed in isolation 
 # 2. How these 2 clusters exist in the integrated objects 
 # 3. Which damaged cells are detected by the damaged cell detection tools 
-# 4. How the expression of certain QC measures differ between labelled 
-populations 
+# 4. How the expression of certain QC measures differ between labelled populations 
 
 #-------------------------------------------------------------------------------
 # PREPARATIONS
@@ -87,10 +86,10 @@ reduce = TRUE){
   mt_rb_genes <- unique(c(mt_genes, rb_genes))
   
   if (reduce){
-  # Reduce based on mt & rb genes only (this occurs in a separate Seurat 
-object (limiric))
-  reduced <- subset(seurat, features = intersect(mt_rb_genes, 
-rownames(seurat@assays$RNA)))
+  # Reduce based on mt & rb genes only (this occurs in a separate Seurat object (limiric))
+  reduced <- subset(seurat, 
+                    features = intersect(mt_rb_genes, rownames(seurat@assays$RNA)))
+  
   } else {reduced <- seurat}
   
   reduced <- NormalizeData(reduced) %>%

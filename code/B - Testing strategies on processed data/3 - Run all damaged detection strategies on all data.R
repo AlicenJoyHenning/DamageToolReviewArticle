@@ -77,8 +77,7 @@ benchmark <- function(
   
   if (SoupX)  {
     
-    # Using Seurat read in the matrices from the STARsolo output for filtered (TOC) and raw (TOD) counts  (must be 
-zipped input files)
+    # Using Seurat read in the matrices from the STARsolo output for filtered (TOC) and raw (TOD) counts  (must be zipped input files)
     table_of_counts <- suppressWarnings(Read10X(filtered_path))
     
     # Only reading in if necessary  
@@ -255,8 +254,7 @@ dataset specificity)
     project   = "unspliced"))
   
   # Calculate nuclear fraction
-  ExonSum   <- Matrix::colSums(spliced[['RNA']]$counts)   # summing over all the genes for each cell (1 reading 
-per cell)
+  ExonSum   <- Matrix::colSums(spliced[['RNA']]$counts)   # summing over all the genes for each cell (1 reading per cell)
   IntronSum <- Matrix::colSums(unspliced[['RNA']]$counts)
   NuclearFraction <- IntronSum / (ExonSum + IntronSum)
   nf <- data.frame(barcode = rownames(unspliced@meta.data), nf = NuclearFraction)
