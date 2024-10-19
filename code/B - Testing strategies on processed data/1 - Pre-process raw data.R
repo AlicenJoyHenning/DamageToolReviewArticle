@@ -1,9 +1,9 @@
 # SCRIPT CONTEXT 
 #
-# To keep tool comparisons as similar as possible, the processed counts are generated 
-# first before input into any tool testing. For tools not run in R, like ddqc,
-# count matrices in the form of a csv file are used as input- these are identical to 
-# those stored in the Seurat object used for testing the other tools.
+# To keep tool comparisons fair, the identical processed count matrix for each sample is 
+# used as input into all tool testing. In R, the processed count matrices are stored
+# in 'Seurat' objects. For tools not run in R, like ddqc and EnsembleKQC, count matrices 
+# are converted to a csv. In all cases, matrices house identical counts. 
 #
 # Processing done: 
 # 1. SoupX ambient RNA correction, requiring raw count matrices. 
@@ -15,22 +15,22 @@
 # 6. Remove red blood cells if present 
 # 7. Extract processed count matrix for non-R tools (ddqc)
 #
-# NOTE:
-# (NB!) Ground truth cases are different to non ground truth cases. Each ground truth sample 
-#       for testing damaged detection strategies includes two separately sequenced samples, 
-#       one for treated & sorted dead cells and the other for untreated, sorted live cells. 
-#
-#      For damaged cell detection, the count matrices of the damaged and control 
-#      samples are merged and integrated to resemble 'one psuedosample'. This simply
-#      concatenates the count matrices without losing their original labels. The 
-#      integration serves only for downstream clustering and visualisation, the 
-#      original (processed) count matrices for each sample are used of tool testing. 
-#
 # Further groundtruth processing done: 
 # 1. Converting Ensembl gene symbols (ENSG0000....) to standard HGNC symbols (CD79A) where needed
 # 2. Merging and integrating damaged and control samples 
 # 
-# Note: After running this script, the user will need to run the ddqc tool in python (ii - Run ddqc.ipynb)
+# NOTE:
+# (NB!) Ground truth cases are different to non ground truth cases. Each ground truth sample 
+#       for testing damaged detection strategies includes two separately sequenced samples, 
+#       one for treated & sorted dead cells, and the other for untreated, sorted live cells. 
+#
+#      For damaged cell detection, the count matrices of the damaged and control 
+#      samples are merged and integrated to resemble 'one psuedosample'. This simply
+#      concatenates the count matrices without losing their original labelss. The 
+#      integration serves only for downstream clustering and visualisation, the 
+#      original (processed) count matrices for each sample are used for tool testing. 
+#
+# Note: After running this script, the user will need to run the tool in python separately (ii - Run ddqc.ipynb)
 
 
 #-------------------------------------------------------------------------------
@@ -54,7 +54,7 @@ for (pkg in packages) {
 # OBTAIN LATEST ANNOTATIONS  
 #-------------------------------------------------------------------------------
 
-# Gene annotations -----
+# Gene annotations for  QC metrics -----
 
 # Connect to AnnotationHub (ah) and get the query search for the organisms of interest
 ah <- AnnotationHub() 
@@ -77,6 +77,7 @@ mouse_annotations <- genes(Mmus_edb, return.type = "data.frame")
 # PREPROCESSING FUNCTION DEFINED 
 #-------------------------------------------------------------------------------
 
+
 # Function for processing ------
 
 preprocess <- function(
@@ -89,18 +90,16 @@ preprocess <- function(
     velocyto_path,       # path to .gz velocyto output of STARsolo
     output_path          # where all outputs are saved 
 ){
-  # Output to user
-  message("\nBegin pre-processing for ", project_name, "...")
+  
+  message("Begin pre-processing for ", project_name, "...")
   
   # 1. SoupX Correction and 2. Feature filtering -------
   
   # Some cases may want this step to be skipped, making it optional 
   if (SoupX)  {
     
-    # Using Seurat read in the matrices from the STARsolo output for filtered (TOC) and raw (TOD) counts  (must be zipped input files)
+    # Using Seurat read in the matrices from the STARsolo output (must be zipped input files)
     table_of_counts <- suppressWarnings(Read10X(filtered_path))
-    
-    # Only reading in if necessary  
     table_of_droplets <- suppressWarnings(Read10X(raw_path))
     
     # Create the soup channel (sc)
@@ -151,6 +150,9 @@ preprocess <- function(
                                                   min.cells = 10,  # A feature must be expressed in at least 10 cells to be retained in the count matrix     
                                                   project = project_name))
     
+    # Normalize counts 
+    seurat <- NormalizeData(seurat)
+    
     # Terminal output : 
     cell_number <- length(Cells(seurat))
     message("\u2714  Ambient correction complete for ", cell_number, " cells")
@@ -163,8 +165,19 @@ preprocess <- function(
     table_of_counts <- suppressWarnings(Read10X(filtered_path))
     
     seurat <- CreateSeuratObject(counts = table_of_counts, 
-                             min.cells = 10, # A feature must be expressed in at least 10 cells to be retained in the count matrix
+                             min.cells = 5, # A feature must be expressed in at least 5 cells to be retained in the count matrix
                              project = project_name)
+    
+    # Estimates for feature filtering 
+    # 0 : ~ 60 000 features
+    # 1 : ~ 30 000 features
+    # 2 : ~ 25 000 features
+    # 3 : ~ 25 000 features
+    # 4 : ~ 22 000 features 
+    # 5 : ~ 20 000 features 
+    
+    # Normalize counts 
+    seurat <- NormalizeData(seurat)
     
     cell_number <- length(Cells(seurat))
 
@@ -176,7 +189,6 @@ preprocess <- function(
   # 3. Calculate nuclear fraction -----
   
   message("Calculating nuclear fraction scores...")
-
   
   if (!is.null(velocyto_path)){
     
@@ -214,21 +226,11 @@ preprocess <- function(
     
   }
   
-  # Inspired by Z. Clarke and G. Bager, 2024; using nuclear lnRNA gene expression 
-  # MALAT1 and NEAT1 as substitutes for nf scores if they absent (since we still want to test DropletQC) 
-  # This is run for all cases to see, when nf is calculated, how how much it differs from this score. 
-  # Update: these scores are too low when converted to ratio
-    
-  # Normalize counts 
-  seurat <- NormalizeData(seurat)
   
-  if (organism == "Hsap"){
-    
-    # Testing metrics in isolation for correlation to nf
-    seurat$nf_malat1 <- FetchData(seurat, vars = "MALAT1")
-    
-}
+  # Inspired by Z. Clarke and G. Bager, 2024; using nuclear lnRNA gene expression MALAT1 and NEAT1 as substitutes for nf scores if they absent (since we still want to test DropletQC) 
+  # Note: This is run for all cases to see, when nf is calculated, how how much it differs from this score. 
   
+  if (organism == "Hsap"){ seurat$nf_malat1 <- FetchData(seurat, vars = "MALAT1")}
   if (organism == "Mmus"){ seurat$nf_malat1 <- FetchData(seurat, vars = "Malat1")}
     
   # min-max normalization: scales values so the min value maps to 0 and max maps to 1 (make the expression values more like nf scores)
@@ -282,12 +284,16 @@ preprocess <- function(
     
   }
   
-  # Calculate the feature percentages
+  # Calculate the feature percentages and normalised expressions 
   seurat$mt.percent <- PercentageFeatureSet(
     object   = seurat,
     features = intersect(mt_genes, rownames(seurat@assays$RNA)),
     assay    = "RNA"
   ) 
+
+  mt_genes_present <- intersect(mt_genes, rownames(seurat@assays$RNA))
+  mt_gene_expression <- FetchData(seurat, vars = mt_genes_present)
+  seurat$mt <- apply(mt_gene_expression, 1, mean)
   
   seurat$rb.percent <- PercentageFeatureSet(
     object   = seurat,
@@ -295,92 +301,92 @@ preprocess <- function(
     assay    = "RNA"
   ) 
   
+  rb_genes_present <- intersect(rb_genes, rownames(seurat@assays$RNA))
+  rb_gene_expression <- FetchData(seurat, vars = rb_genes_present)
+  seurat$rb <- apply(rb_gene_expression, 1, mean)
+  
+  
   seurat$malat1.percent <- PercentageFeatureSet(
     object   = seurat,
     features = malat1,
     assay    = "RNA"
   ) 
   
+  seurat$malat1 <- FetchData(seurat, vars = malat1)
   
   
   # 5. DoubletFinder filtering -----
   
-#   message("Doublet Finder running...")
-#   
-#   # Prepare seurat object (required) for DropletQC
-#   seurat_DF <- NormalizeData(seurat, verbose = FALSE) %>%
-#     FindVariableFeatures(verbose = FALSE) %>%
-#     ScaleData(verbose = FALSE) %>%
-#     RunPCA(verbose = FALSE) %>%
-#     FindNeighbors(dims = 1:10, verbose = FALSE) %>%
-#     FindClusters(verbose = FALSE) %>%
-#     RunUMAP(dims = 1:10, verbose = FALSE)
-#   
-#   # Open a connection to a temporary file for writing (output of DoubletFinder) 
-#   tmp_conn <- file(tempfile(), open = "wt")
-# 
-#   # Redirect standard output and messages to the temporary file
-#   sink(tmp_conn)
-#   sink(tmp_conn, type = "message")
-# 
-#   # pK Identification (no ground-truth)
-#   sweep.res.list <- paramSweep(seurat_DF, PCs = 1:10, sct = FALSE)
-#   sweep.stats <- summarizeSweep(sweep.res.list, GT = FALSE)
-#   bcmvn <- find.pK(sweep.stats)
-# 
-#   pK <- bcmvn %>% # select the pK that corresponds to max bcmvn to optimize doublet detection
-#    dplyr::filter(BCmetric == max(BCmetric)) %>%
-#    dplyr::select(pK)
-#   pK <- as.numeric(as.character(pK[[1]]))
-# 
-# 
-#   # Homotypic Doublet Proportion Estimate
-#   annotations <- seurat_DF@meta.data$seurat_clusters
-#   homotypic.prop <- modelHomotypic(annotations)
-#   nExp_poi <- round(0.075 * nrow(seurat_DF@meta.data))  # Assuming 7.5% doublet formation rate (can be changed for dataset specificity)
-#   nExp_poi.adj <- round(nExp_poi * (1 - homotypic.prop))
-#   nExp_poi.adj <- nExp_poi.adj - (nExp_poi.adj * (1 / 7))
-# 
-# # Run DF itself
-#   seurat_DF <- doubletFinder(
-#     seurat_DF,
-#     PCs = 1:10,
-#     pN = 0.25,
-#     pK = pK,
-#     nExp = nExp_poi.adj,
-#     reuse.pANN = FALSE,
-#   )
-# 
-#   # Reset output redirection
-#   sink(NULL)
-#   sink(NULL, type = "message")
-# 
-#   # Close the connection
-#   close(tmp_conn)
-# 
-# 
-#   # Meta data for actual Seurat object
-#   df_col_name <- grep("^DF\\.classifications", colnames(seurat_DF@meta.data), value = TRUE)
-#   doublet_classifications <- seurat_DF@meta.data[[df_col_name]]
-#   seurat$DF <- doublet_classifications
-#   
-#   # Remove doublets before running any of the detection tools 
-#   seurat <- subset(seurat, DF == "Singlet")
-#   seurat$DF <- NULL
+  message("Doublet Finder running...")
+
+  # Prepare seurat object (required) for DropletQC
+  seurat_DF <- NormalizeData(seurat, verbose = FALSE) %>%
+    FindVariableFeatures(verbose = FALSE) %>%
+    ScaleData(verbose = FALSE) %>%
+    RunPCA(verbose = FALSE) %>%
+    FindNeighbors(dims = 1:10, verbose = FALSE) %>%
+    FindClusters(verbose = FALSE) %>%
+    RunUMAP(dims = 1:10, verbose = FALSE)
+
+  # Open a connection to a temporary file for writing (output of DoubletFinder)
+  tmp_conn <- file(tempfile(), open = "wt")
+
+  # Redirect standard output and messages to the temporary file
+  sink(tmp_conn)
+  sink(tmp_conn, type = "message")
+
+  # pK Identification (no ground-truth)
+  sweep.res.list <- paramSweep(seurat_DF, PCs = 1:10, sct = FALSE)
+  sweep.stats <- summarizeSweep(sweep.res.list, GT = FALSE)
+  bcmvn <- find.pK(sweep.stats)
+
+  pK <- bcmvn %>% # select the pK that corresponds to max bcmvn to optimize doublet detection
+   dplyr::filter(BCmetric == max(BCmetric)) %>%
+   dplyr::select(pK)
+  pK <- as.numeric(as.character(pK[[1]]))
+
+
+  # Homotypic Doublet Proportion Estimate
+  annotations <- seurat_DF@meta.data$seurat_clusters
+  homotypic.prop <- modelHomotypic(annotations)
+  nExp_poi <- round(0.075 * nrow(seurat_DF@meta.data))  # Assuming 7.5% doublet formation rate (can be changed for dataset specificity)
+  nExp_poi.adj <- round(nExp_poi * (1 - homotypic.prop))
+  nExp_poi.adj <- nExp_poi.adj - (nExp_poi.adj * (1 / 7))
+
+# Run DF itself
+  seurat_DF <- doubletFinder(
+    seurat_DF,
+    PCs = 1:10,
+    pN = 0.25,
+    pK = pK,
+    nExp = nExp_poi.adj,
+    reuse.pANN = FALSE,
+  )
+
+  # Reset output redirection
+  sink(NULL)
+  sink(NULL, type = "message")
+
+  # Close the connection
+  close(tmp_conn)
+
+
+  # Meta data for actual Seurat object
+  df_col_name <- grep("^DF\\.classifications", colnames(seurat_DF@meta.data), value = TRUE)
+  doublet_classifications <- seurat_DF@meta.data[[df_col_name]]
+  seurat$DF <- doublet_classifications
+
+  # Remove doublets before running any of the detection tools
+  seurat <- subset(seurat, DF == "Singlet")
+  seurat$DF <- NULL
  
   
   # 6. Remove red blood cells -----
   
   message("Filtering red blood cells...")
   
-  if (organism == "Hsap") {
-    
-    hemo_gene <- c("HBA1", "HBA2", "HBB") # hemoglobin subunit genes
-  }
-  
-  if (organism == "Mmus") {
-    hemo_gene <- c("Hba-a1", "Hba-a2", "Hbb-bt", "Hbb-bs") # lower case & different!
-  }
+  if (organism == "Hsap") { hemo_gene <- c("HBA1", "HBA2", "HBB") } # hemoglobin subunit genes 
+  if (organism == "Mmus") { hemo_gene <- c("Hba-a1", "Hba-a2", "Hbb-bt", "Hbb-bs") } # lower case & different 
   
   # Calculate proportion of hemo gene expression & store as meta data
   seurat$RBC <- PercentageFeatureSet(
@@ -388,7 +394,6 @@ preprocess <- function(
     features = intersect(hemo_gene, rownames(seurat@assays$RNA)),
     assay    = "RNA"
   )
-
   
   # Filter and remove column 
   seurat$RBC <- ifelse(seurat$RBC >=  hemo_threshold, "RBC", "non-RBC")
@@ -397,7 +402,7 @@ preprocess <- function(
   unfiltered_RBC <- length(Cells(seurat))
   seurat <- subset(seurat, RBC == "non-RBC")
   RBC_number <- unfiltered_RBC - length(Cells(seurat))
-  message("\u2714", RBC_number, " red blood cells removed")
+  message("\u2714 ", RBC_number, " red blood cells removed")
   
   seurat$RBC <- NULL
   
@@ -405,12 +410,11 @@ preprocess <- function(
   # 7. Create output to run in python tools ----
   
   # Extract count matrix
-  ddqc_counts <- seurat@assays$RNA$counts
-  ddqc <- CreateSeuratObject(counts = ddqc_counts, assay = "RNA")
-  mtx <- suppressWarnings(as.matrix(ddqc@assays$RNA$counts))
-  write.csv(mtx, file = paste0(output_path, "/ddqc/", project_name, "_ddqc_matrix_data.csv"))
+  counts <- seurat@assays$RNA$counts
+  matrix <- CreateSeuratObject(counts = counts, assay = "RNA")
+  matrix <- suppressWarnings(as.matrix(matrix@assays$RNA$counts))
+  write.csv(matrix, file = paste0(output_path, "/ddqc/", project_name, "_ddqc_matrix_data.csv"))
   message("\u2714  Input for ddqc prepared")
-  
   
   # Save processed Seurat object 
   saveRDS(seurat, file = paste0(output_path, "/R_objects/", project_name, "_processed.rds"))
@@ -421,13 +425,166 @@ preprocess <- function(
 
 # Test 
 test <- preprocess(project_name = "test", 
+                   organism = "Hsap",
                    SoupX = FALSE,
                    raw_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/raw/", 
                    filtered_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/filtered/", 
                    velocyto_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/velocyto/", 
                    output_path = "/home/alicen/Projects/ReviewArticle")
 
-# 
+# Samples 
+# A549 
+cellline_A549 <- benchmark(project_name = "A549",
+                           organism = "Hsap",
+                           SoupX = TRUE,
+                           raw_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/raw/",
+                           filtered_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/filtered/",
+                           velocyto_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/velocyto/",
+                           output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+# HCT-116 
+cellline_HCT116 <- benchmark(project_name = "HCT116",
+                             organism = "Hsap",
+                             SoupX = FALSE,
+                             raw_path = "/home/alicen/Projects/limiric/test_data/cellline_HCT-116/raw/",
+                             filtered_path = "/home/alicen/Projects/limiric/test_data/cellline_HCT-116/filtered/",
+                             velocyto_path = "/home/alicen/Projects/limiric/test_data/cellline_HCT-116/velocyto/",
+                             output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+
+# Jurkat 
+cellline_jurkat <- benchmark(project_name = "jurkat",
+                             organism = "Hsap",
+                             SoupX = FALSE,
+                             raw_path = "/home/alicen/Projects/limiric/test_data/cellline_jurkat/raw/",
+                             filtered_path = "/home/alicen/Projects/limiric/test_data/cellline_jurkat/filtered/",
+                             velocyto_path = "/home/alicen/Projects/limiric/test_data/cellline_jurkat/velocyto/",
+                             output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+
+
+# 3 Diseased tissue 
+
+diseased_liver <- benchmark(project_name = "dLiver",
+                            organism = "Hsap",
+                            raw_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/raw/",
+                            filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/filtered/",
+                            velocyto_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/velocyto/",
+                            output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+
+diseased_lung <- benchmark(project_name = "dLung",
+                           organism = "Hsap",
+                           raw_path = "/home/alicen/Projects/limiric/test_data/diseased_lung/raw/",
+                           filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_lung/filtered/",
+                           velocyto_path = "/home/alicen/Projects/limiric/test_data/diseased_lung/velocyto/",
+                           output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+
+diseased_PBMC <- benchmark(project_name = "dPBMC",
+                           organism = "Hsap",
+                           raw_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/raw/",
+                           filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/filtered/",
+                           velocyto_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/velocyto/",
+                           output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+
+# 3 healthy tissues 
+healthy_liver <- benchmark(project_name = "hLiver",
+                           organism = "Hsap",
+                           raw_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/raw/",
+                           filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/filtered/",
+                           velocyto_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/velocyto/",
+                           output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+healthy_lung <- benchmark(project_name = "hLung",
+                          organism = "Hsap",
+                          SoupX = FALSE,=
+                          raw_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/raw/",
+                          filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/filtered/",
+                          velocyto_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/velocyto/",
+                          output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+healthy_PBMC <- benchmark(project_name = "hPBMC",
+                          organism = "Hsap",
+                          raw_path = "/home/alicen/Projects/limiric/test_data/healthy_PBMC/raw/",
+                          filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_PBMC/filtered/",
+                          velocyto_path = "/home/alicen/Projects/limiric/test_data/healthy_PBMC/velocyto/",
+                          output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+
+# 3 Mouse samples
+mouse_liver <- benchmark(project_name = "mLiver",
+                         organism = "Mmus",
+                         raw_path = "/home/alicen/Projects/limiric/test_data/mouse_liver/raw/",
+                         filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_liver/filtered/",
+                         velocyto_path = "/home/alicen/Projects/limiric/test_data/mouse_liver/velocyto/",
+                         output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+mouse_lung <- benchmark(project_name = "mLung",
+                        organism = "Mmus",
+                        raw_path = "/home/alicen/Projects/limiric/test_data/mouse_lung/raw/",
+                        filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_lung/filtered/",
+                        velocyto_path = "/home/alicen/Projects/limiric/test_data/mouse_lung/velocyto/",
+                        output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+
+# PBMC
+mouse_PBMC <- benchmark(project_name = "mPBMC",
+                        organism = "Mmus",
+                        raw_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/raw/",
+                        filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/filtered/",
+                        velocyto_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/velocyto/",
+                        ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/mouse_PBMC_ddqc_output.csv",
+                        output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
+)
+
+
+# 3 Tumor samples -------
+# Ductal 
+tumor_ductal <- benchmark(project_name = "ductal",
+                          organism = "Hsap",
+                          cluster_ranks = 5,
+                          raw_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/raw/",
+                          filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/filtered/",
+                          velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/velocyto/",
+                          ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_ductal_ddqc_output.csv",
+                          output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis")
+
+# Glio
+tumor_glio <- benchmark(project_name = "glio",
+                        organism = "Hsap",
+                        raw_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/raw/",
+                        filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/filtered/",
+                        velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/velocyto/",
+                        ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_glio_ddqc_output.csv",
+                        output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
+)
+
+# Hodgkin
+tumor_hodgkin <- benchmark(project_name = "hodgkin",
+                           organism = "Hsap",
+                           #  cluster_ranks = 2,
+                           raw_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/raw/",
+                           filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/filtered/",
+                           velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/velocyto/",
+                           ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_hodgkin_ddqc_output.csv",
+                           output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
+)
+
+
+
 
 
 
