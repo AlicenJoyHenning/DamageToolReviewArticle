@@ -5,6 +5,12 @@
 # in 'Seurat' objects. For tools not run in R, like ddqc and EnsembleKQC, count matrices 
 # are converted to a csv. In all cases, matrices house identical counts. 
 #
+#
+# Preparations: 
+# 1. Gene annotations for the human and mouse genome are obtained trhough bioMart
+# 2. Converting Ensembl gene symbols (ENSG0000....) to standard HGNC symbols (CD79A) where needed
+#
+#
 # Processing done: 
 # 1. SoupX ambient RNA correction, requiring raw count matrices. 
 #    Note: If raw count path not present, this step will be skipped.
@@ -14,23 +20,6 @@
 # 5. DoubletFinder to filter potential doublets (first filtering done)
 # 6. Remove red blood cells if present 
 # 7. Extract processed count matrix for non-R tools (ddqc)
-#
-# Further groundtruth processing done: 
-# 1. Converting Ensembl gene symbols (ENSG0000....) to standard HGNC symbols (CD79A) where needed
-# 2. Merging and integrating damaged and control samples 
-# 
-# NOTE:
-# (NB!) Ground truth cases are different to non ground truth cases. Each ground truth sample 
-#       for testing damaged detection strategies includes two separately sequenced samples, 
-#       one for treated & sorted dead cells, and the other for untreated, sorted live cells. 
-#
-#      For damaged cell detection, the count matrices of the damaged and control 
-#      samples are merged and integrated to resemble 'one psuedosample'. This simply
-#      concatenates the count matrices without losing their original labelss. The 
-#      integration serves only for downstream clustering and visualisation, the 
-#      original (processed) count matrices for each sample are used for tool testing. 
-#
-# Note: After running this script, the user will need to run the tool in python separately (ii - Run ddqc.ipynb)
 
 
 #-------------------------------------------------------------------------------
@@ -39,9 +28,8 @@
 
 # Load libraries -------
 
-packages <- c("AnnotationHub", "biomaRt", "cowplot", "devtools", "dplyr", "DoubletFinder", "DoubletFinder", 
-              "DropletQC", "ensembldb", "ggplot2", "glmGamPoi", "limiric", "Matrix", "miQC", "png", "presto", "robustbase", 
-              "scuttle", "Seurat", "SingleCellExperiment", "SoupX", "tidyr", "valiDrops")
+packages <- c("AnnotationHub", "biomaRt", "cowplot", "devtools", "dplyr", "DoubletFinder", 
+              "ensembldb", "ggplot2", "glmGamPoi", "Matrix", "png", "presto", "scuttle", "Seurat", "SingleCellExperiment", "SoupX", "tidyr")
 
 for (pkg in packages) {
   if (!require(pkg, character.only = TRUE)) {
@@ -74,6 +62,64 @@ mouse_annotations <- genes(Mmus_edb, return.type = "data.frame")
 
 
 #-------------------------------------------------------------------------------
+# GENE SYMBOL FUNCTION DEFINED 
+#-------------------------------------------------------------------------------
+
+# Converting to traditional gene symbols ------
+
+# Input processed files (Zenodo) have non-conventional gene names that need to be changed
+
+renamegenes <- function(processed_path, project_name) {
+  
+  # Read in processed object
+  sample <- readRDS(processed_path)
+  sample <- as.Seurat(sample)
+  
+  # Filter and edit the column names -----
+  sample@meta.data <- sample@meta.data[, c("cell_status", "id", "nCount_originalexp", "nFeature_originalexp")]
+  
+  # Edit the genes from ensembl to hgnc -----
+  
+  # Correct gene symbols to recognizable format 
+  sample@assays$RNA <- sample@assays$originalexp
+  counts <- sample@assays$RNA$counts
+  
+  # Create Emsembl to HGNC gene naming map 
+  ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
+  bm <- getBM(attributes = c("ensembl_gene_id", "hgnc_symbol"), 
+              values = rownames(counts), 
+              mart = ensembl)
+  
+  # Perform mapping
+  hgnc.symbols <- bm$hgnc_symbol[match(rownames(counts), bm$ensembl_gene_id)] # matching ENSG0... genes to gene names like DUX4
+  counts <- as.matrix(counts)
+  rownames(counts) <- hgnc.symbols
+  
+  # Remove empty and duplicated rows 
+  counts <- counts[!is.na(rownames(counts)), ]
+  counts <- counts[(rownames(counts) != ""), ]
+  counts <- counts[unique(rownames(counts)), ]
+  
+  length(rownames(counts))
+  length(unique(rownames(counts)))
+  
+  seurat <- CreateSeuratObject(counts = counts, 
+                               project = project_name)
+  
+  seurat$orig.ident <- project_name
+  
+  return(seurat) # not saving because it needs to be processed, this is temporary form 
+}
+
+# Run the conversions 
+GM18507_control <- renamegenes(project_name = "GM18507_control", processed_path = "/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_001_sceset_v3_raw.rds")
+GM18507_dying <- renamegenes(project_name = "GM18507_dying", processed_path = "/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_002_sceset_v3_raw.rds")
+GM18507_dead <- renamegenes(project_name = "GM18507_dead", processed_path = "/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_003_sceset_v3_raw.rds")
+PDX_control <- renamegenes(project_name = "PDX_control", processed_path = "/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_002_sceset_v3_raw.rds")
+PDX_dead <- renamegenes(project_name = "PDX_dead", processed_path = "/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_004_sceset_v3_raw.rds")
+
+
+#-------------------------------------------------------------------------------
 # PREPROCESSING FUNCTION DEFINED 
 #-------------------------------------------------------------------------------
 
@@ -81,14 +127,16 @@ mouse_annotations <- genes(Mmus_edb, return.type = "data.frame")
 # Function for processing ------
 
 preprocess <- function(
-    project_name,        # string with dataset identifier 
-    organism = "Hsap",   # Either Hsap or Mmus
-    hemo_threshold = 50, # Adjustable for more stringent filtering of red blood cells 
-    SoupX = TRUE,        # TRUE or FALSE 
-    raw_path,            # path to .gz raw output of STARsolo
-    filtered_path,       # path to .gz filtered output of STARsolo
-    velocyto_path,       # path to .gz velocyto output of STARsolo
-    output_path          # where all outputs are saved 
+    project_name,           # string with dataset identifier 
+    organism = "Hsap",      # Either Hsap or Mmus
+    hemo_threshold = 50,    # Adjustable for more stringent filtering of red blood cells 
+    SoupX = TRUE,           # TRUE or FALSE 
+    Seurat = NULL,          # For the case where no counts of any kind, Seurat object can be used 
+    scale_nf_malat1 = TRUE, # For ground truth, no scaling before merging 0 - 1 based on both control and dead cells
+    raw_path = NULL,        # path to .gz raw output of STARsolo
+    filtered_path = NULL,   # path to .gz filtered output of STARsolo
+    velocyto_path = NULL,   # path to .gz velocyto output of STARsolo
+    output_path             # where all outputs are saved 
 ){
   
   message("Begin pre-processing for ", project_name, "...")
@@ -159,7 +207,7 @@ preprocess <- function(
     message("\u2714  SoupX contamination estimate of ", rho_estimate)
     
   }
-  else {
+  if (SoupX == FALSE & is.null(Seurat)) {
     
     # Using Seurat read in the matrices from the STARsolo output for filtered (TOC) and raw (TOD) counts  (must be zipped input files)
     table_of_counts <- suppressWarnings(Read10X(filtered_path))
@@ -184,13 +232,18 @@ preprocess <- function(
     message("\u2714 ", cell_number, " cells detected, ambient correction skipped")
 
   }
+  if (SoupX == FALSE & !is.null(Seurat)){ 
+    
+    seurat <- Seurat
+  
+  }
   
   
   # 3. Calculate nuclear fraction -----
   
-  message("Calculating nuclear fraction scores...")
-  
   if (!is.null(velocyto_path)){
+    
+    message("Calculating nuclear fraction scores...")
     
     # Define parameters for file paths and gene names
     spliced_file   <- file.path(velocyto_path, "spliced.mtx.gz")
@@ -230,13 +283,16 @@ preprocess <- function(
   # Inspired by Z. Clarke and G. Bager, 2024; using nuclear lnRNA gene expression MALAT1 and NEAT1 as substitutes for nf scores if they absent (since we still want to test DropletQC) 
   # Note: This is run for all cases to see, when nf is calculated, how how much it differs from this score. 
   
-  if (organism == "Hsap"){ seurat$nf_malat1 <- FetchData(seurat, vars = "MALAT1")}
-  if (organism == "Mmus"){ seurat$nf_malat1 <- FetchData(seurat, vars = "Malat1")}
+  if (organism == "Hsap"){ seurat$nf_malat1 <- FetchData(seurat, vars = "MALAT1", layer = "counts")}
+  if (organism == "Mmus"){ seurat$nf_malat1 <- FetchData(seurat, vars = "Malat1", layer = "counts")}
     
   # min-max normalization: scales values so the min value maps to 0 and max maps to 1 (make the expression values more like nf scores)
-  seurat$nf_malat1 <- (seurat$nf_malat1 - min(seurat$nf_malat1)) / 
+  if (scale_nf_malat1) {
+    
+   seurat$nf_malat1 <- (seurat$nf_malat1 - min(seurat$nf_malat1)) / 
     (max(seurat$nf_malat1) - min(seurat$nf_malat1))
   
+  }
   
   # 4. Calculate standard quality control metrics ----- 
   
@@ -271,12 +327,12 @@ preprocess <- function(
     
     # Extract appropriate gene subsets
     mt_genes <- annotations %>%
-      filter(grepl("mt-", gene_name)) %>% 
+      dplyr::filter(grepl("mt-", gene_name)) %>% 
       pull(gene_name)
     
     # Isolate ribosomal genes (RPS and RPL)
     rb_genes <- annotations %>%
-      filter(grepl("^rsp|^rpl", gene_name)) %>%
+      dplyr::filter(grepl("^Rsp|^Rpl", gene_name)) %>%
       pull(gene_name)
     
     # combine mt and rb genes
@@ -291,9 +347,9 @@ preprocess <- function(
     assay    = "RNA"
   ) 
 
-  mt_genes_present <- intersect(mt_genes, rownames(seurat@assays$RNA))
-  mt_gene_expression <- FetchData(seurat, vars = mt_genes_present)
-  seurat$mt <- apply(mt_gene_expression, 1, mean)
+  # mt_genes_present <- intersect(mt_genes, rownames(seurat@assays$RNA))
+  # mt_gene_expression <- FetchData(seurat, vars = mt_genes_present, layer = counts)
+  # seurat$mt <- apply(mt_gene_expression, 1, mean)
   
   seurat$rb.percent <- PercentageFeatureSet(
     object   = seurat,
@@ -301,10 +357,9 @@ preprocess <- function(
     assay    = "RNA"
   ) 
   
-  rb_genes_present <- intersect(rb_genes, rownames(seurat@assays$RNA))
-  rb_gene_expression <- FetchData(seurat, vars = rb_genes_present)
-  seurat$rb <- apply(rb_gene_expression, 1, mean)
-  
+  # rb_genes_present <- intersect(rb_genes, rownames(seurat@assays$RNA))
+  # rb_gene_expression <- FetchData(seurat, vars = rb_genes_present)
+  # seurat$rb <- apply(rb_gene_expression, 1, mean)
   
   seurat$malat1.percent <- PercentageFeatureSet(
     object   = seurat,
@@ -413,8 +468,8 @@ preprocess <- function(
   counts <- seurat@assays$RNA$counts
   matrix <- CreateSeuratObject(counts = counts, assay = "RNA")
   matrix <- suppressWarnings(as.matrix(matrix@assays$RNA$counts))
-  write.csv(matrix, file = paste0(output_path, "/ddqc/", project_name, "_ddqc_matrix_data.csv"))
-  message("\u2714  Input for ddqc prepared")
+  write.csv(matrix, file = paste0(output_path, "/python/input/", project_name, "_matrix_data.csv"))
+  message("\u2714  Input for python prepared")
   
   # Save processed Seurat object 
   saveRDS(seurat, file = paste0(output_path, "/R_objects/", project_name, "_processed.rds"))
@@ -423,18 +478,11 @@ preprocess <- function(
   
 }
 
-# Test 
-test <- preprocess(project_name = "test", 
-                   organism = "Hsap",
-                   SoupX = FALSE,
-                   raw_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/raw/", 
-                   filtered_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/filtered/", 
-                   velocyto_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/velocyto/", 
-                   output_path = "/home/alicen/Projects/ReviewArticle")
+
 
 # Samples 
 # A549 
-cellline_A549 <- benchmark(project_name = "A549",
+cellline_A549 <- preprocess(project_name = "A549",
                            organism = "Hsap",
                            SoupX = TRUE,
                            raw_path = "/home/alicen/Projects/limiric/test_data/cellline_A549/raw/",
@@ -444,7 +492,7 @@ cellline_A549 <- benchmark(project_name = "A549",
 )
 
 # HCT-116 
-cellline_HCT116 <- benchmark(project_name = "HCT116",
+cellline_HCT116 <- preprocess(project_name = "HCT116",
                              organism = "Hsap",
                              SoupX = FALSE,
                              raw_path = "/home/alicen/Projects/limiric/test_data/cellline_HCT-116/raw/",
@@ -455,7 +503,7 @@ cellline_HCT116 <- benchmark(project_name = "HCT116",
 
 
 # Jurkat 
-cellline_jurkat <- benchmark(project_name = "jurkat",
+cellline_jurkat <- preprocess(project_name = "jurkat",
                              organism = "Hsap",
                              SoupX = FALSE,
                              raw_path = "/home/alicen/Projects/limiric/test_data/cellline_jurkat/raw/",
@@ -467,8 +515,7 @@ cellline_jurkat <- benchmark(project_name = "jurkat",
 
 
 # 3 Diseased tissue 
-
-diseased_liver <- benchmark(project_name = "dLiver",
+diseased_liver <- preprocess(project_name = "dLiver",
                             organism = "Hsap",
                             raw_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/raw/",
                             filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_liver/filtered/",
@@ -477,7 +524,7 @@ diseased_liver <- benchmark(project_name = "dLiver",
 )
 
 
-diseased_lung <- benchmark(project_name = "dLung",
+diseased_lung <- preprocess(project_name = "dLung",
                            organism = "Hsap",
                            raw_path = "/home/alicen/Projects/limiric/test_data/diseased_lung/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_lung/filtered/",
@@ -486,7 +533,7 @@ diseased_lung <- benchmark(project_name = "dLung",
 )
 
 
-diseased_PBMC <- benchmark(project_name = "dPBMC",
+diseased_PBMC <- preprocess(project_name = "dPBMC",
                            organism = "Hsap",
                            raw_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/diseased_PBMC/filtered/",
@@ -496,7 +543,7 @@ diseased_PBMC <- benchmark(project_name = "dPBMC",
 
 
 # 3 healthy tissues 
-healthy_liver <- benchmark(project_name = "hLiver",
+healthy_liver <- preprocess(project_name = "hLiver",
                            organism = "Hsap",
                            raw_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_liver/filtered/",
@@ -504,16 +551,16 @@ healthy_liver <- benchmark(project_name = "hLiver",
                            output_path = "/home/alicen/Projects/ReviewArticle"
 )
 
-healthy_lung <- benchmark(project_name = "hLung",
+healthy_lung <- preprocess(project_name = "hLung",
                           organism = "Hsap",
-                          SoupX = FALSE,=
+                          SoupX = FALSE,
                           raw_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/raw/",
                           filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/filtered/",
                           velocyto_path = "/home/alicen/Projects/limiric/test_data/healthy_lung/velocyto/",
                           output_path = "/home/alicen/Projects/ReviewArticle"
 )
 
-healthy_PBMC <- benchmark(project_name = "hPBMC",
+healthy_PBMC <- preprocess(project_name = "hPBMC",
                           organism = "Hsap",
                           raw_path = "/home/alicen/Projects/limiric/test_data/healthy_PBMC/raw/",
                           filtered_path = "/home/alicen/Projects/limiric/test_data/healthy_PBMC/filtered/",
@@ -523,7 +570,7 @@ healthy_PBMC <- benchmark(project_name = "hPBMC",
 
 
 # 3 Mouse samples
-mouse_liver <- benchmark(project_name = "mLiver",
+mouse_liver <- preprocess(project_name = "mLiver",
                          organism = "Mmus",
                          raw_path = "/home/alicen/Projects/limiric/test_data/mouse_liver/raw/",
                          filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_liver/filtered/",
@@ -531,7 +578,7 @@ mouse_liver <- benchmark(project_name = "mLiver",
                          output_path = "/home/alicen/Projects/ReviewArticle"
 )
 
-mouse_lung <- benchmark(project_name = "mLung",
+mouse_lung <- preprocess(project_name = "mLung",
                         organism = "Mmus",
                         raw_path = "/home/alicen/Projects/limiric/test_data/mouse_lung/raw/",
                         filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_lung/filtered/",
@@ -539,232 +586,109 @@ mouse_lung <- benchmark(project_name = "mLung",
                         output_path = "/home/alicen/Projects/ReviewArticle"
 )
 
-
-# PBMC
-mouse_PBMC <- benchmark(project_name = "mPBMC",
+mouse_PBMC <- preprocess(project_name = "mPBMC",
                         organism = "Mmus",
                         raw_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/raw/",
                         filtered_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/filtered/",
                         velocyto_path = "/home/alicen/Projects/limiric/test_data/mouse_PBMC/velocyto/",
-                        ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/mouse_PBMC_ddqc_output.csv",
-                        output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
+                        output_path = "/home/alicen/Projects/ReviewArticle"
 )
 
 
-# 3 Tumor samples -------
-# Ductal 
-tumor_ductal <- benchmark(project_name = "ductal",
+# 3 Tumor samples 
+tumor_ductal <- preprocess(project_name = "ductal",
                           organism = "Hsap",
-                          cluster_ranks = 5,
                           raw_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/raw/",
                           filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/filtered/",
                           velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_ductal/velocyto/",
-                          ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_ductal_ddqc_output.csv",
-                          output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis")
+                          output_path = "/home/alicen/Projects/ReviewArticle"
+)
 
-# Glio
-tumor_glio <- benchmark(project_name = "glio",
+tumor_glio <- preprocess(project_name = "glio",
                         organism = "Hsap",
                         raw_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/raw/",
                         filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/filtered/",
                         velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_glioblastoma/velocyto/",
-                        ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_glio_ddqc_output.csv",
-                        output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
+                        output_path = "/home/alicen/Projects/ReviewArticle"
 )
 
-# Hodgkin
-tumor_hodgkin <- benchmark(project_name = "hodgkin",
+tumor_hodgkin <- preprocess(project_name = "hodgkin",
                            organism = "Hsap",
-                           #  cluster_ranks = 2,
                            raw_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/raw/",
                            filtered_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/filtered/",
                            velocyto_path = "/home/alicen/Projects/limiric/test_data/tumor_hodgkin/velocyto/",
-                           ddqc_path = "/home/alicen/Projects/limiric/benchmarking/ddqc_output/tumor_hodgkin_ddqc_output.csv",
-                           output_path = "/home/alicen/Projects/limiric/damage_left_behind_analysis"
+                           output_path = "/home/alicen/Projects/ReviewArticle"
 )
 
 
+# Ground truth cases
+HEK293_control <- preprocess(project_name = "HEK293_control",
+                             organism = "Hsap",
+                             scale_nf_malat1 = FALSE,
+                             raw_path = "/home/alicen/Projects/limiric/test_data/ground_truth/healthy/raw/",
+                             filtered_path = "/home/alicen/Projects/limiric/test_data/ground_truth/healthy/filtered/",
+                             velocyto_path = "/home/alicen/Projects/limiric/test_data/ground_truth/healthy/velocyto/",
+                             output_path = "/home/alicen/Projects/ReviewArticle"
+)
+                             
+HEK293_apoptotic <- preprocess(project_name = "HEK293_apoptotic",
+                             organism = "Hsap",
+                             scale_nf_malat1 = FALSE,
+                             raw_path = "/home/alicen/Projects/limiric/test_data/ground_truth/apoptotic/raw/",
+                             filtered_path = "/home/alicen/Projects/limiric/test_data/ground_truth/apoptotic/filtered/",
+                             velocyto_path = "/home/alicen/Projects/limiric/test_data/ground_truth/apoptotic/velocyto/",
+                             output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+HEK293_proapoptotic <- preprocess(project_name = "HEK293_proapoptotic",
+                               organism = "Hsap",
+                               SoupX = FALSE,
+                               scale_nf_malat1 = FALSE,
+                               raw_path = "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/raw/",
+                               filtered_path = "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/filtered/",
+                               velocyto_path = "/home/alicen/Projects/limiric/test_data/ground_truth/proapoptotic/velocyto/",
+                               output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+GM18507_control_processed <- preprocess(project_name = "GM18507_control",
+                              organism = "Hsap",
+                              SoupX = FALSE,
+                              scale_nf_malat1 = FALSE,
+                              Seurat = GM18507_control,
+                              output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+GM18507_dying_processed <- preprocess(project_name = "GM18507_dying",
+                                      organism = "Hsap",
+                                      SoupX = FALSE,
+                                      scale_nf_malat1 = FALSE,
+                                      Seurat = GM18507_dying,
+                                      output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+GM18507_dead_processed <- preprocess(project_name = "GM18507_dead",
+                                      organism = "Hsap",
+                                      SoupX = FALSE,
+                                     scale_nf_malat1 = FALSE,
+                                      Seurat = GM18507_dead,
+                                      output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+PDX_control_processed <- preprocess(project_name = "PDX_control",
+                                    organism = "Hsap",
+                                    SoupX = FALSE,
+                                    scale_nf_malat1 = FALSE,
+                                    Seurat = PDX_control,
+                                    output_path = "/home/alicen/Projects/ReviewArticle"
+)
+
+PDX_dead_processed <- preprocess(project_name = "PDX_dead",
+                                 organism = "Hsap",
+                                 SoupX = FALSE,
+                                 scale_nf_malat1 = FALSE,
+                                 Seurat = PDX_dead,
+                                 output_path = "/home/alicen/Projects/ReviewArticle"
+)
 
 
-
-
- ggplot(test@meta.data, aes_string(x = "nf", y = "nf_malat1")) +
-    geom_point() +  # Plot points
-    geom_smooth(method = "lm", color = "blue") +  # Add line of best fit
-    theme_classic() 
-  
-
-
-
-
-#-------------------------------------------------------------------------------
-# GENE SYMBOL FUNCTION DEFINED 
-#-------------------------------------------------------------------------------
-
-# Function for converting gene symbols ------
-
-
-# Function to merge, integrate, and visualise groups 
-mergeandintegrate <- function(input_list = SA928, 
-                              mtrb_reduce = FALSE,
-                              sample_IDs = c("live", "dying", "dead"),
-                              project_name = "SA928",
-                              output_dir = "/home/alicen/Projects/limiric/groundtruth/R_objects/"
-){
-  
-  # Merge the samples (accounting for # of samples)
-  
-  # Check if input_list and sample_IDs have the same length
-  if (length(input_list) != length(sample_IDs)) {
-    stop("The length of input_list and sample_IDs must be the same.")
-  }
-  
-  # Initialize the merged object with the first element
-  first_obj <- input_list[[1]]
-  
-  # Loop through the rest of the elements to create their own list 
-  remaining_objs <- list()
-  
-  for (i in 2:length(input_list)) {
-    remaining_objs[[(i-1)]] <- input_list[[i]]
-  }
-  
-  # Convert the list to the required format
-  remaining_objs <- do.call(c, remaining_objs)
-  
-  # Run the Seurat merge function
-  merged_obj <- merge(
-    x = first_obj,
-    y = remaining_objs,
-    add.cell.ids = sample_IDs,  
-    project = project_name 
-  )
-  
-  
-  if (mtrb_reduce) {
-    
-    # Storage 
-    full_merged_obj <- merged_obj
-    
-    # Reduce based on mt & rb genes only (this occurs in a separate Seurat object (limiric))
-    merged_obj <- subset(merged_obj, features = intersect(mt_rb_genes, rownames(merged_obj@assays$RNA)))
-    
-    
-  }
-  
-  
-  # Attempt to integrate 
-  integrated_obj <- NormalizeData(merged_obj) %>%
-    FindVariableFeatures() %>%
-    ScaleData() %>%
-    RunPCA() %>%
-    IntegrateLayers(method = CCAIntegration, orig.reduction = "pca", new.reduction = "integrated")
-  
-  
-  # re-join layers after integration
-  integrated_obj[["RNA"]] <- JoinLayers(integrated_obj[["RNA"]])
-  
-  # Create meta data column for sample name 
-  integrated_obj$orig.ident <- rownames(integrated_obj@meta.data)
-  integrated_obj$orig.ident <- sub("_.*", "", integrated_obj$orig.ident)
-  
-  
-  
-  
-  # Dimensionality reduction for visualisation (UMAP)
-  seurat <- FindNeighbors(integrated_obj, reduction = "integrated", dims = 1:30) %>%
-    FindClusters(reduction = "integrated", dims = 1:30) %>%
-    RunUMAP(reduction = "integrated", dims = 1:30)
-  
-  
-  # Visualise
-  colours_full <- c("#6C79F0","#A1A9F5","#ADDBB6", "#72BC7B", "#70B1D2","#9FCBE1", "#C5E7A7","#C9AFDF","#9D71B3")
-  
-  # For label consistency with PreProcess plots
-  cells <- length(Cells(seurat))
-  message("Sample ", project_name, " has ", cells, " cells.")
-  
-  plot_clusters <- DimPlot(seurat,
-                           group.by = "orig.ident",
-                           pt.size = 1,
-                           label = TRUE,
-                           label.box = TRUE,
-                           label.size = 5,
-                           label.color = "white",
-                           repel = TRUE) +
-    scale_color_manual(values = colours_full) +
-    scale_fill_manual(values = colours_full) + 
-    NoAxes() + NoLegend() +
-    xlab("UMAP 1") + ylab("UMAP 2") +
-    theme(plot.title = element_text(hjust = 0.5, size = rel(1), face = "bold"),
-          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
-          panel.border = element_rect(colour = "black", fill=NA, linewidth =1))
-  
-  
-  if (mtrb_reduce) {
-    
-    # Define mitochondrial expression
-    seurat$mt.percent <- PercentageFeatureSet(
-      object   = full_merged_obj,
-      features = intersect(mt_genes, rownames(full_merged_obj@assays$RNA)),
-      assay    = "RNA")
-    
-    
-    # Define ribosomal expression
-    seurat$rb.percent <- PercentageFeatureSet(
-      object   = full_merged_obj,
-      features = intersect(rb_genes, rownames(full_merged_obj@assays$RNA)),
-      assay    = "RNA")
-    
-    seurat@assays$RNA <- integrated_obj@assays$RNA
-    
-  }
-  
-  else { 
-    
-    # Define mitochondrial expression
-    seurat$mt.percent <- PercentageFeatureSet(
-      object   = seurat,
-      features = intersect(mt_genes, rownames(seurat@assays$RNA)),
-      assay    = "RNA"
-    )
-    
-    # Define ribosomal expression
-    seurat$rb.percent <- PercentageFeatureSet(
-      object   = seurat,
-      features = intersect(rb_genes, rownames(seurat@assays$RNA)),
-      assay    = "RNA"
-    )
-    
-  }
-  
-  mt_plot <- FeaturePlot(seurat,
-                         pt.size = 1,
-                         features = "mt.percent") +
-    NoAxes() + NoLegend() +
-    xlab("UMAP 1") + ylab("UMAP 2") +
-    theme(plot.title = element_text(hjust = 0.5, size = rel(1), face = "bold"),
-          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
-          panel.border = element_rect(colour = "black", fill=NA, linewidth =1))
-  
-  
-  rb_plot <- FeaturePlot(seurat,
-                         pt.size = 1,
-                         features = "rb.percent") +
-    NoAxes() + NoLegend() +
-    xlab("UMAP 1") + ylab("UMAP 2") +
-    theme(plot.title = element_text(hjust = 0.5, size = rel(1), face = "bold"),
-          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
-          panel.border = element_rect(colour = "black", fill=NA, linewidth =1))
-  
-  
-  plot <- plot_clusters + mt_plot + rb_plot
-  
-  saveRDS(seurat, 
-          paste0(output_dir, project_name, ".rds"))
-  
-  return(list(seurat = seurat,
-              plot = plot))
-  
-}
-
+### End
