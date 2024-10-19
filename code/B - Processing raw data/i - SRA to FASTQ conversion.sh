@@ -3,7 +3,7 @@
 # Convert SRA to FASTQ files with sra toolkit
 # In some cases, data is only available in SRA format. To convert to FASTQ, as required for alignment, 
 # download the SRA toolkit : https://github.com/ncbi/sra-tools/wiki/01.-Downloading-SRA-Toolkit. 
-# The path where the downloaded sra_toolkit must be specified inside the <download_path> below.
+# The path of the downloaded sra_toolkit must be specified inside the <download_path> below.
 
 #PBS -P <Project>
 #PBS -N SRA_FASTQ
