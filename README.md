@@ -1,4 +1,4 @@
-# A review and evaluation of current damaged cell detection strategies for single cell RNA sequencing (scRNA-seq)
+# Evaluating damaged cell detection strategies for single cell RNA sequencing (scRNA-seq)
 
 This repository contains the workflow, direct analysis code, and original data (where possible due to size constraints) for the results and figures generated in our article. For any concerns, questions or suggestions, please feel free to open a new  [![Issue](https://img.shields.io/badge/Issues-blue?style=flat&logo=github)](https://github.com/AlicenJoyHenning/DamageToolReviewArticle/issues)
 <br>
