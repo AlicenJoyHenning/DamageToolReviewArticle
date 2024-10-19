@@ -93,17 +93,20 @@ mergeandscale <- function(input_list,
   # re-join layers after integration
   seurat[["RNA"]] <- JoinLayers(seurat[["RNA"]])
   
-  # Create meta data column for sample name 
-  # seurat$orig.ident <- rownames(seurat@meta.data)
-  # seurat$orig.ident <- sub("_.*", "", seurat$orig.ident)
-  
-  
   # 2. Scale the nf malat1 scores -----
   seurat$nf_malat1 <- (seurat$nf_malat1 - min(seurat$nf_malat1)) / 
     (max(seurat$nf_malat1) - min(seurat$nf_malat1))
   
   
-  # Save 
+  # 3. Save 
+  
+  # Extract count matrix
+  counts <- seurat@assays$RNA$counts
+  matrix <- CreateSeuratObject(counts = counts, assay = "RNA")
+  matrix <- suppressWarnings(as.matrix(matrix@assays$RNA$counts))
+  write.csv(matrix, file = paste0("/home/alicen/Projects/ReviewArticle/python/input/", project_name, "_matrix_data.csv"))
+  message("\u2714  Input for python prepared")
+  
   saveRDS(seurat, paste0(output_dir, project_name, ".rds"))
   return(seurat)
   
