@@ -1,8 +1,8 @@
 # SCRIPT CONTEXT 
 #
-# To keep tool comparisons fair, the identical processed count matrix for each sample is 
+# To keep tool comparisons fair, the same processed count matrix for each sample is 
 # used as input into all tool testing. In R, the processed count matrices are stored
-# in 'Seurat' objects. For tools not run in R, like ddqc and EnsembleKQC, count matrices 
+# in 'Seurat' objects. For tools not run in R, like `ddqc` and `EnsembleKQC`, count matrices 
 # are converted to a csv. In all cases, matrices house identical counts. 
 #
 #
@@ -117,6 +117,7 @@ GM18507_dying <- renamegenes(project_name = "GM18507_dying", processed_path = "/
 GM18507_dead <- renamegenes(project_name = "GM18507_dead", processed_path = "/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX049_SA928_003_sceset_v3_raw.rds")
 PDX_control <- renamegenes(project_name = "PDX_control", processed_path = "/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_002_sceset_v3_raw.rds")
 PDX_dead <- renamegenes(project_name = "PDX_dead", processed_path = "/home/alicen/Projects/limiric/test_data/tumour_groundtruth/batchfx-for-zenodo/TENX019_SA604X7XB02089_004_sceset_v3_raw.rds")
+
 
 
 #-------------------------------------------------------------------------------

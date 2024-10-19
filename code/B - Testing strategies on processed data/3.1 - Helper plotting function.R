@@ -1,9 +1,29 @@
 # SCRIPT CONTEXT 
 #
-# Helper function for the benchmarking pipeline to plot the output of benchmark function 
-# (3 - Run remaining detection strategies)
-# Plots the output labels of each tool according to three different visualisations  
+# Helper function for the benchmarking pipeline to plot the output of benchmark function.
+# Plots the output labels of each tool according to three different visualisations.
 
+#-------------------------------------------------------------------------------
+# OBTAIN LATEST ANNOTATIONS  
+#-------------------------------------------------------------------------------
+
+# Gene annotations for  QC metrics -----
+
+# Connect to AnnotationHub (ah) and get the query search for the organisms of interest
+ah <- AnnotationHub() 
+Hsap_ahDb <- query(ah, pattern = c("Homo sapien", "EnsDb"), ignore.case = TRUE) 
+Mmus_ahDb <- query(ah, pattern = c("Mus musculus", "EnsDb"), ignore.case = TRUE) 
+
+# # Extract gene-level information from database of most up-to-date version
+Hsap_versions <- mcols(Hsap_ahDb) 
+Hsap_latest_version <- tail(rownames(Hsap_versions), n = 1)
+Hsap_edb <- ah[[Hsap_latest_version]]
+human_annotations <- genes(Hsap_edb, return.type = "data.frame")   
+
+Mmus_versions <- mcols(Mmus_ahDb) 
+Mmus_latest_version <- tail(rownames(Mmus_versions), n = 1)
+Mmus_edb <- ah[[Mmus_latest_version]]
+mouse_annotations <- genes(Mmus_edb, return.type = "data.frame")  
 
 
 #-------------------------------------------------------------------------------
@@ -11,15 +31,26 @@
 #-------------------------------------------------------------------------------
 
 # Function for plotting using processed output from the benchmarking pipeline
-BenchPlot <- function(seurat, output_file, organism) {
+
+BenchPlot <- function(seurat, 
+                      output_file, 
+                      organism = "Hsap", 
+                      methods = c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
+                                  "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
+                      
+                      ) {
   
-  # Prepare data
+  # Prepare data frame for plotting 
   df <- seurat@meta.data
-  df$mito.ratio <- as.numeric(df$mito.ratio)
+  df$mt.percent <- as.numeric(df$mt.percent)
   df$nFeature_RNA <- as.numeric(df$nFeature_RNA)
-  df$nf <- as.numeric(df$nf)
   df$nCount_RNA <- as.numeric(df$nCount_RNA)
+  df$nf_malat1 <- as.numeric(df$nf_malat1)
+
   
+  if ("nf" %in% colnames(df)){ df$nf <- as.numeric(df$nf) } else { df$nf <- as.numeric(log10(df$nf_malat1)) }
+  
+
   # Define scatter plot themes
   plot_theme <- theme(
     plot.caption = element_text(hjust = 0.5, vjust = -0.5, size = 16),
@@ -38,15 +69,12 @@ BenchPlot <- function(seurat, output_file, organism) {
     axis.line = element_line(colour = "black")
   )
   
-  # List of methods of interest
-  methods <- c("ddqc", "DropletQC", "limiric", "miQC", "valiDrops", "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
-  
   
   # Function to create individual plots
   create_plot <- function(df, x, y, method, title) {
     ggplot(df, aes_string(x = x, y = y, color = method)) +
       geom_point(size = 0.5) +
-      scale_color_manual(values = c("cell" = "#D5D5D5", "damaged" = "#9AA9FF", "empty_droplet" = "darkgrey", "Uncertain" = "grey")) +
+      scale_color_manual(values = c("cell" = "#D5D5D5", "damaged" = "#9AA9FF")) +
       labs(title = title) + 
       xlab("") + ylab("") +
       plot_theme
@@ -54,43 +82,63 @@ BenchPlot <- function(seurat, output_file, organism) {
   
   # Create plots for nFeature_RNA vs mito.ratio
   plots1 <- lapply(methods, function(method) {
-    create_plot(df, "nFeature_RNA", "mito.ratio", method, method)
+    create_plot(df, "nFeature_RNA", "mt.percent", method, method)
   })
   
   # Create plots for nf vs nCount_RNA
   plots2 <- lapply(methods, function(method) {
-    create_plot(df, "nf", "nCount_RNA", method, method) + scale_y_log10()
+    create_plot(df, "nf_malat1", "nCount_RNA", method, method) 
+  })
+  
+  # Create plots for nf vs nCount_RNA
+  plots3 <- lapply(methods, function(method) {
+    create_plot(df, "nf", "nCount_RNA", method, method) 
   })
   
   # Create plots for tSNE
-  if (organism == "Hsap") { data("mt_rb_genes", package = "limiric")  }
-  
-  if (organism == "Mmus") {
+  if (organism == "Hsap"){
     
-    # Get mouse annotations
-    data("mouse_annotations", package = "limiric")
+    # Define human genes 
+    annotations <- human_annotations 
+    malat1 <- c("MALAT1")
     
-    annotations <- mouse_annotations
+    # Extract appropriate gene subsets
+    mt_genes <- annotations %>%
+      dplyr::filter(grepl("MT-", gene_name)) %>% 
+      pull(gene_name)
     
-    # Get gene annotations for mitochondrial genes
-    mt_genes <- annotations[grep("mt-", annotations$gene_name, perl = TRUE), ]
-    mt_genes <- mt_genes[grepl("mitochondrially encoded", mt_genes$description, perl = TRUE), ]
-    mt_genes <- mt_genes %>% pull(gene_name)
-    
-    # isolate ribosomal genes
-    rb_genes <- annotations[grepl("ribosomal", annotations$description, perl = TRUE), ]
-    rb_genes <- rb_genes[grepl("protein_coding", rb_genes$gene_biotype, perl = TRUE), ]
-    rb_genes <- rb_genes %>% pull(gene_name)
+    # Isolate ribosomal genes (RPS and RPL)
+    rb_genes <- annotations %>%
+      dplyr::filter(grepl("^RPS|^RPL", gene_name)) %>%
+      pull(gene_name)
     
     # combine mt and rb genes
-    mt_rb_genes <- c(mt_genes, rb_genes)
-    mt_rb_genes <- unique(mt_rb_genes)
+    mt_rb_genes <- unique(c(mt_genes, rb_genes))
+    
+  }
+  if (organism == "Mmus"){
+    
+    # Define human genes 
+    annotations <- mouse_annotations 
+    malat1 <- c("Malat1")
+    
+    # Extract appropriate gene subsets
+    mt_genes <- annotations %>%
+      dplyr::filter(grepl("mt-", gene_name)) %>% 
+      pull(gene_name)
+    
+    # Isolate ribosomal genes (RPS and RPL)
+    rb_genes <- annotations %>%
+      dplyr::filter(grepl("^Rsp|^Rpl", gene_name)) %>%
+      pull(gene_name)
+    
+    # combine mt and rb genes
+    mt_rb_genes <- unique(c(mt_genes, rb_genes))
     
   }
   
   # Reduce based on mt & rb genes only (this occurs in a separate Seurat object (limiric))
-  seurat_view <- subset(seurat, 
-                        features = intersect(mt_rb_genes, rownames(seurat@assays$RNA)))
+  seurat_view <- subset(seurat, features = intersect(mt_rb_genes, rownames(seurat@assays$RNA)))
   
   seurat_view <- NormalizeData(seurat_view, verbose = FALSE) %>%
     FindVariableFeatures(verbose = FALSE) %>%
@@ -101,11 +149,11 @@ BenchPlot <- function(seurat, output_file, organism) {
     RunTSNE(dims = 1:10, verbose = FALSE, check_duplicates = FALSE)
   
   # Transfer labels 
-  seurat_view$limiric <- seurat$limiric
+  seurat_view$ddqc <- seurat$ddqc
   seurat_view$DropletQC <- seurat$DropletQC
+  seurat_view$ensembleKQC <- seurat$ensembleKQC
   seurat_view$miQC <-  seurat$miQC
   seurat_view$valiDrops <- seurat$valiDrops
-  seurat_view$ddqc <- seurat$ddqc
   seurat_view$manual_all <- seurat$manual_all
   seurat_view$manual_mito_ribo <- seurat$manual_mito_ribo
   seurat_view$manual_mito <- seurat$manual_mito
@@ -114,9 +162,9 @@ BenchPlot <- function(seurat, output_file, organism) {
   
   
   # Create tSNE plots
-  plots3 <- lapply(methods, function(method) {
+  plots4 <- lapply(methods, function(method) {
     DimPlot(seurat_view, reduction = 'tsne', group.by = method) + 
-      scale_color_manual(values = c("cell" = "#D5D5D5", "damaged" = "#9AA9FF", "empty_droplet" = "darkgrey", "Uncertain" = "grey")) +
+      scale_color_manual(values = c("cell" = "#D5D5D5", "damaged" = "#9AA9FF")) +
       NoAxes() + NoLegend() +
       theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 1))
   })
@@ -125,11 +173,12 @@ BenchPlot <- function(seurat, output_file, organism) {
   combined_plot1 <- plot_grid(plotlist = plots1, ncol = 10, rel_heights = c(1, 1))
   combined_plot2 <- plot_grid(plotlist = plots2, ncol = 10, rel_heights = c(1, 1))
   combined_plot3 <- plot_grid(plotlist = plots3, ncol = 10, rel_heights = c(1, 1))
+  combined_plot4 <- plot_grid(plotlist = plots4, ncol = 10, rel_heights = c(1, 1))
   
   combined_plot <- plot_grid(
-    combined_plot1, combined_plot2, combined_plot3,
+    combined_plot1, combined_plot2, combined_plot3, combined_plot4,
     ncol = 1, 
-    rel_heights = c(1, 1, 1)
+    rel_heights = c(1, 1, 1, 1)
   )
   
   combined_plot <- ggdraw(combined_plot) + 
@@ -138,7 +187,7 @@ BenchPlot <- function(seurat, output_file, organism) {
     )
   
   # Save the plot
-  ggsave(output_file, combined_plot, width = 36, height = 10, units = "in", dpi = 300, limitsize = FALSE)
+  ggsave(output_file, combined_plot, width = 36, height = 14, units = "in", dpi = 300, limitsize = FALSE)
   
   return(combined_plot)
   

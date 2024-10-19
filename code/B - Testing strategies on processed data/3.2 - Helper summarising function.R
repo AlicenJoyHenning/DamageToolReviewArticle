@@ -10,20 +10,21 @@
 
 # Helper function for benchmarking 
 
-summarise_results <- function(seurat){
+summarise_results <- function(seurat, 
+                              methods = list("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
+                                          "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
+                              ){
   
   # Function to automate live and dead cell calculations for each method
   calculate_percentage <- function(data, method) {
+    
     data %>%
       mutate(Category = data[[method]]) %>%
       group_by(Category) %>%
       summarise(Count = n(), .groups = 'drop') %>%
       mutate(Percentage = (Count / sum(Count)) * 100)
     }
-
-  # List of methods
-  methods <- c("ddqc", "DropletQC", "limiric", "miQC", "valiDrops", "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
-
+  
   # Calculate percentages for each method and store in a list
   percentages_list <- lapply(methods, function(method) {
     calculate_percentage(seurat@meta.data, method) %>%
@@ -41,7 +42,7 @@ summarise_results <- function(seurat){
 
   # Ensure the columns are named correctly
   final_df <- final_df %>%
-    rename_with(~ c("Method", "cell", "damaged", "empty_droplet"), everything())
+    rename_with(~ c("Method", "cell", "damaged"), everything())
 
   # Collapse repeated rows by retaining the maximum value for each column
   final_df <- final_df %>%
