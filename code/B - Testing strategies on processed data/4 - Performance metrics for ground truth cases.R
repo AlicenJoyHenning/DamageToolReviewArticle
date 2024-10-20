@@ -19,227 +19,222 @@
 # Load necessary libraries
 library(ggplot2)
 library(dplyr)
+library(tidyr)
+library(PRROC)
+library(patchwork)  # For arranging plots
 
-
-# Load datasets (5 cases) -----
-
-# HEK293 data
-apoptotic <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/apoptotic.rds")
-pro_apoptotic <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/pro_apoptotic.rds")
-
-# SA928 
-SA928_dead <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/SA928_dead_live.rds")
-SA928_dying <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/SA928_dying_live.rds")
-
-# SA604 
-SA604_dead <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/SA604_dead_live.rds")
-
+# Load datasets (5 cases)
+apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_apo.csv")
+pro_apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_pro.csv")
+GM18507_dead <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dead.csv")
+GM18507_dying <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dying.csv")
+PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.csv")
 
 #-------------------------------------------------------------------------------
 # PERFORMANCE METRICS
 #-------------------------------------------------------------------------------
 
-# Confusion metrics  ----
-
-
-# Adding measures of TP, TN, FP, FN
-seurat <- SA604_dead
-seurat$DropletQC <- ifelse(seurat$DropletQC == "empty_droplet", "cell", seurat$DropletQC)
-
-# for SA928 
-seurat$orig.ident <- rownames(seurat@meta.data)
-seurat$orig.ident <- sub("__.*", "", seurat$orig.ident)
-
-
-# String inputs 
-TP <- c("dead")
-TN <- c("live")
-
-
 # List of methods
-method <- c("manual_malat1")
-# "ddqc", "DropletQC", "limiric", "miQC", "valiDrops", 
-# "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
+methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
+             "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
 
-
-seurat$method_outcome <- "na"
-seurat$method_outcome <- ifelse(seurat$orig.ident == TP & seurat[[method]] == "damaged", "true_positive", seurat$method_outcome)
-seurat$method_outcome <- ifelse(seurat$orig.ident == TP & seurat[[method]] == "cell", "false_negative", seurat$method_outcome)
-seurat$method_outcome <- ifelse(seurat$orig.ident == TN & seurat[[method]] == "cell", "true_negative", seurat$method_outcome)
-seurat$method_outcome <- ifelse(seurat$orig.ident == TN & seurat[[method]] == "damaged", "false_positive", seurat$method_outcome)
-
-# Summarise for statistics 
-outcome <- seurat@meta.data %>% 
-  group_by(method_outcome) %>%
-  summarise(Count = n())
-
-outcome 
-
-# Plot sensitivity & F1 --------
-
-
-# Create the data frame
-data <- data.frame(
-  Dataset = c("HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", 
-              "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", 
-              "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", 
-              "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", 
-              "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dead", 
-              "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dying", 
-              "SA928_dying", "SA928_dying", "SA928_dying", "SA928_dying", "SA928_dying", "SA928_dying", "SA928_dying", 
-              "SA928_dying", "SA928_dying", "SA604_dead", "SA604_dead", "SA604_dead", "SA604_dead", "SA604_dead", 
-              "SA604_dead", "SA604_dead", "SA604_dead", "SA604_dead", "SA604_dead"),
-  Tool = c("ddqc", "DropletQC", "limirc", "miQC", "valiDrops", "all", "mito_ribo", "mito", 
-           "mito_isolated", "malat1", "ddqc", "DropletQC", "limirc", "miQC", "valiDrops", "all", 
-           "mito_ribo", "mito", "mito_isolated", "malat1", "ddqc", "DropletQC", "limirc", 
-           "miQC", "valiDrops", "all", "mito_ribo", "mito", "mito_isolated", "malat1", 
-           "ddqc", "DropletQC", "limirc", "miQC", "valiDrops", "all", "mito_ribo", "mito", 
-           "mito_isolated", "malat1", "ddqc", "DropletQC", "limirc", "miQC", "valiDrops", "all", 
-           "mito_ribo", "mito", "mito_isolated", "malat1"),
-  Sensitivity = c(0.067956583, 0, 0.50023596, 0.5261916, 0.084945729, 0.555450684, 0.55261916, 0.489853705, 0.299669655, 
-                  0.290231241, 0.084509353, 0.404988513, 0.24762061, 0.64292747, 0.001805054, 0.109123728, 0.270922219, 
-                  0.29881851, 0.018214637, 0.171972432, 0.070691025, 0, 0.525814138, 0.673550437, 0.218427323, 0.5, 
-                  0.889594917, 0.883240667, 0.659253376, 0.853852264, 0.049219688, 0, 0.204081633, 0.241296519, 
-                  0.022809124, 0.356542617, 0.337334934, 0.326530612, 0.235294118, 0.2899106, 0.283333333, 0, 0.55, 
-                  0.561111111, 0.561111111, 0.786111111, 0.775, 0.730555556, 0.575, 0.694444444),
-  F1 = c(0.101802757, 0, 0.492679526, 0.375484088, 0.155709343, 0.422848931, 0.422896352, 0.38430211, 0.317897372, 
-         0.302583026, 0.147670251, 0.457884972, 0.314801293, 0.625478927, 0.003503743, 0.172794595, 0.34203439, 
-         0.3679903, 0.033474065, 0.252165544, 0.088778055, 0, 0.474551971, 0.427850656, 0.357607282, 0.374313758, 
-         0.457236171, 0.472688629, 0.438573316, 0.466478629, 0.061148397, 0, 0.189732143, 0.137624101, 0.042316258, 
-         0.151918159, 0.149547632, 0.155074116, 0.137737175, 0.134399053, 0.131274131, 0, 0.709677419, 0.58045977, 
-         0.690598291, 0.33993994, 0.366863905, 0.352310784, 0.419452888, 0.441306267)
+# Input structure
+input_list <- list(
+  list(name = "apoptotic", df = apoptotic, TP = "HEK293_apoptotic", TN = "HEK293_control"),
+  list(name = "proapoptotic", df = pro_apoptotic, TP = "HEK293_proapoptotic", TN = "HEK293_control"),
+  list(name = "GM18507_dead", df = GM18507_dead, TP = "GM18507_dead", TN = "GM18507_control"),
+  list(name = "GM18507_dying", df = GM18507_dying, TP = "GM18507_dying", TN = "GM18507_control"),
+  list(name = "PDX", df = PDX, TP = "PDX_dead", TN = "PDX_control")
 )
 
-# Create box plots
-sensitivity_plot <- ggplot(data, aes(x = Tool, y = Sensitivity)) +
-  geom_boxplot() +
-  geom_jitter(width = 0.2, aes(color = Dataset)) +
-  labs(title = "Sensitivity Scores", y = "Sensitivity") + 
-  theme_classic() +  
-  theme(legend.title = element_blank(),
-        legend.text = element_text(size = 16),
-        axis.text = element_text(size = 16),
-        axis.text.x = element_text(angle = 90, hjust = 1),
-        axis.title = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
-        plot.title = element_text(hjust = 0.5, face = "bold", size = 16)
-  )
+# Initialize df for storage
+results <- data.frame(dataset = character(), 
+                      strategy = character(), 
+                      precision = numeric(), 
+                      fnr = numeric(), 
+                      pr_auc = numeric(),
+                      precision_lower = numeric(),
+                      precision_upper = numeric(),
+                      fnr_lower = numeric(),
+                      fnr_upper = numeric(),
+                      pr_auc_lower = numeric(),
+                      pr_auc_upper = numeric(),
+                      stringsAsFactors = FALSE)
 
+# Function to calculate 95% CI ∈ (0, 1) (precision and FNR)
+calc_ci <- function(p, n) {
+  error <- qnorm(0.975) * sqrt((p * (1 - p)) / n)
+  lower <- max(p - error, 0)  
+  upper <- min(p + error, 1)  
+  return(c(lower, upper))
+}
 
-f1_plot <- ggplot(data, aes(x = Tool, y = F1)) +
-  geom_boxplot() +
-  geom_jitter(width = 0.2, aes(color = Dataset)) +
-  labs(title = "F1 Scores", y = "F1 Score")  +
-  theme_classic() +  
-  theme(
-    #legend.position = "none",
-    legend.title = element_blank(),
-    legend.text = element_text(size = 16),
-        axis.text = element_text(size = 16),
-        axis.text.x = element_text(angle = 90, hjust = 1),
-        axis.title = element_blank(),
-        axis.ticks.y = element_blank(),
-        panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
-        plot.title = element_text(hjust = 0.5, face = "bold", size = 16)
-  )
+# Function to calculate PR-AUC with bootstrapped CIs (1000 bootstraps)
+calc_pr_auc_ci <- function(scores, labels, n_bootstraps = 1000) {
+  aucs <- numeric(n_bootstraps)
+  for (i in 1:n_bootstraps) {
+    # Bootstrap resampling
+    idx <- sample(seq_along(scores), replace = TRUE)
+    pr <- pr.curve(scores.class0 = scores[idx], weights.class0 = labels[idx], curve = FALSE)
+    aucs[i] <- pr$auc.integral
+  }
+  auc_mean <- mean(aucs)
+  auc_lower <- quantile(aucs, 0.025)
+  auc_upper <- quantile(aucs, 0.975)
+  return(c(auc_mean, auc_lower, auc_upper))
+}
 
-f1_plot + sensitivity_plot
+# Calculate precision, FNR, and PR-AUC for each strategy for each dataset
+for (item in input_list) {
+  
+  # Extract components of the list 
+  df <- item$df
+  TP <- item$TP
+  TN <- item$TN
+  dataset_name <- item$name
+  
+  # Loop through each method
+  for (method in methods) {
+    
+    df$method_outcome <- "na"
+    
+    # Assign method_outcome based on conditions
+    df$method_outcome <- ifelse(df$orig.ident == TP & df[[method]] == "damaged", "true_positive", df$method_outcome)
+    df$method_outcome <- ifelse(df$orig.ident == TP & df[[method]] == "cell", "false_negative", df$method_outcome)
+    df$method_outcome <- ifelse(df$orig.ident == TN & df[[method]] == "cell", "true_negative", df$method_outcome)
+    df$method_outcome <- ifelse(df$orig.ident == TN & df[[method]] == "damaged", "false_positive", df$method_outcome)
+    
+    # Summarise for stats
+    outcome <- df %>% 
+      group_by(method_outcome) %>%
+      summarise(Count = n(), .groups = 'drop')
+    
+    # Extract confusion matrix counts 
+    TP_count <- outcome %>% dplyr::filter(method_outcome == "true_positive") %>% pull(Count)
+    FP_count <- outcome %>% dplyr::filter(method_outcome == "false_positive") %>% pull(Count)
+    FN_count <- outcome %>% dplyr::filter(method_outcome == "false_negative") %>% pull(Count)
+    TN_count <- outcome %>% dplyr::filter(method_outcome == "true_negative") %>% pull(Count)
+    
+    TP_count <- ifelse(length(TP_count) == 0, 0, TP_count)
+    FP_count <- ifelse(length(FP_count) == 0, 0, FP_count)
+    FN_count <- ifelse(length(FN_count) == 0, 0, FN_count)
+    TN_count <- ifelse(length(TN_count) == 0, 0, TN_count)
+    
+    # Calculate precision and FNR
+    precision <- ifelse((TP_count + FP_count) > 0, TP_count / (TP_count + FP_count), NA)
+    fnr <- ifelse((TP_count + FN_count) > 0, FN_count / (TP_count + FN_count), NA)
+    
+    # Calculate confidence intervals
+    precision_ci <- ifelse(!is.na(precision), calc_ci(precision, TP_count + FP_count), c(NA, NA))
+    fnr_ci <- ifelse(!is.na(fnr), calc_ci(fnr, TP_count + FN_count), c(NA, NA))
+    
+    # Calculate PR-AUC and its confidence interval using bootstrapping
+    scores <- c(rep(1, TP_count), rep(0, FN_count), rep(1, FP_count), rep(0, TN_count))
+    labels <- c(rep(1, TP_count + FN_count), rep(0, FP_count + TN_count))
+    pr_auc_ci <- calc_pr_auc_ci(scores, labels)
+    
+    # Store results
+    results <- rbind(results, 
+                     data.frame(dataset = dataset_name, strategy = method, precision = precision, fnr = fnr, 
+                                pr_auc = pr_auc_ci[1], 
+                                precision_lower = precision_ci[1], precision_upper = precision_ci[2],
+                                fnr_lower = fnr_ci[1], fnr_upper = fnr_ci[2],
+                                pr_auc_lower = pr_auc_ci[2], pr_auc_upper = pr_auc_ci[3],
+                                stringsAsFactors = FALSE))
+  }
+}
 
-# bar plots for median 
+# View final results
+View(results)
 
-# Calculate median scores for each tool
-median_scores <- data %>%
-  group_by(Tool) %>%
-  summarise(Median_Sensitivity = median(Sensitivity), Median_F1 = median(F1))
+#-------------------------------------------------------------------------------
+# PLOTTING
+#-------------------------------------------------------------------------------
 
-# Create bar plots for median scores
-sensitivity_bar_plot <- ggplot(median_scores, aes(x = Tool, y = Median_Sensitivity)) +
+# Convert the strategy column to a factor with the specified order
+results$strategy <- factor(results$strategy, levels = methods)
+
+# Pivot the data frame to long format
+df_long <- results %>%
+  pivot_longer(cols = c(precision, fnr), names_to = "measure", values_to = "value")
+
+# Define the colors for the strategies
+strategy_colors <- c("#999FA9", "#586667", "#73966E", "#415741", "#65719E", "#383F54", "#E8E5D6", "#A4A388", "#8B3860", "#522239")
+
+# Create the bar plot for precision
+precision_plot <- ggplot(df_long %>% dplyr::filter(measure == "precision"), aes(x = strategy, y = value, fill = strategy)) +
   geom_bar(stat = "identity") +
-  labs(title = "Median Sensitivity Scores", y = "Median Sensitivity") + 
+  facet_wrap(~ dataset, nrow = 1) +
+  scale_fill_manual(values = strategy_colors) +
+  labs(title = "Precision", y = "Precision") + 
   theme_classic() +  
   theme(
-    #legend.position = "none",
     legend.title = element_blank(),
     legend.text = element_text(size = 16),
+    legend.position = "none",
+    legend.justification = "center",
     axis.text = element_text(size = 16),
-    axis.text.x = element_text(angle = 90, hjust = 1),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
     axis.title = element_blank(),
     axis.ticks.y = element_blank(),
+    axis.line = element_blank(),
     panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 16)
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    strip.background = element_rect(fill = "#8393C6"),
+    strip.text = element_text(color = "white", size = 12, face = "bold")
   )
 
-f1_bar_plot <- ggplot(median_scores, aes(x = Tool, y = Median_F1)) +
+# Create the bar plot for FNR
+fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy, y = value, fill = strategy)) +
   geom_bar(stat = "identity") +
-  labs(title = "Median F1 Scores", y = "Median F1 Score")+ 
+  facet_wrap(~ dataset, nrow = 1) +
+  scale_fill_manual(values = strategy_colors) +
+  labs(title = "False Negative Rate (FNR)", y = "FNR") + 
   theme_classic() +  
   theme(
-    #legend.position = "none",
     legend.title = element_blank(),
     legend.text = element_text(size = 16),
+    legend.position = "none",
+    legend.justification = "center",
     axis.text = element_text(size = 16),
-    axis.text.x = element_text(angle = 90, hjust = 1),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
     axis.title = element_blank(),
     axis.ticks.y = element_blank(),
+    axis.line = element_blank(),
     panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 16)
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    strip.background = element_rect(fill = "#8393C6"),
+    strip.text = element_text(color = "white", size = 12, face = "bold")
   )
 
-# Print the plots
-print(sensitivity_bar_plot)
-print(f1_bar_plot)
-
-
-# False negative rate 
-
-# Create the data frame
-data <- data.frame(
-  Dataset = c("HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", 
-              "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", "HEK293_apoptotic", 
-              "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", 
-              "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", 
-              "HEK293_pro_apoptotic", "HEK293_pro_apoptotic", "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dead", 
-              "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dead", "SA928_dying", 
-              "SA928_dying", "SA928_dying", "SA928_dying", "SA928_dying", "SA928_dying", "SA928_dying", "SA928_dying", 
-              "SA928_dying", "SA928_dying", "SA604_dead", "SA604_dead", "SA604_dead", "SA604_dead", "SA604_dead", 
-              "SA604_dead", "SA604_dead", "SA604_dead", "SA604_dead", "SA604_dead"),
-  Tool = c("ddqc", "DropletQC", "limirc", "miQC", "valiDrops", "all", "mito_ribo", "mito", 
-           "mito_isolated", "malat1", "ddqc", "DropletQC", "limirc", "miQC", "valiDrops", "all", 
-           "mito_ribo", "mito", "mito_isolated", "malat1", "ddqc", "DropletQC", "limirc", 
-           "miQC", "valiDrops", "all", "mito_ribo", "mito", "mito_isolated", "malat1", 
-           "ddqc", "DropletQC", "limirc", "miQC", "valiDrops", "all", "mito_ribo", "mito", 
-           "mito_isolated", "malat1", "ddqc", "DropletQC", "limirc", "miQC", "valiDrops", "all", 
-           "mito_ribo", "mito", "mito_isolated", "malat1"),
-  FNR = c(0.932043417, 1, 0.49976404, 0.4738084, 0.915054271, 0.444549316, 0.44738084, 0.510146295, 0.700330345, 
-          0.709768759, 0.915490647, 0.595011487, 0.75237939, 0.35707253, 0.998194946, 0.890876272, 0.729077781, 
-          0.70118149, 0.981785363, 0.828027568, 0.929308975, 1, 0.474185862, 0.326449563, 0.781572677, 0.5, 
-          0.110405083, 0.116759333, 0.340746624, 0.146147736, 0.950780312, 1, 0.795918367, 0.758703481, 0.977190876, 
-          0.643457383, 0.662665066, 0.673469388, 0.764705882, 0.7100894, 0.716666667, 1, 0.45, 0.438888889, 
-          0.438888889, 0.213888889, 0.225, 0.269444444, 0.425, 0.305555556)
-)
-
-
-# Calculate median FNR scores for each tool
-median_scores <- data %>%
-  group_by(Tool) %>%
-  summarise(Median_FNR = median(FNR))
-
-# Create bar plot for median FNR scores
-fnr_bar_plot <- ggplot(median_scores, aes(x = Tool, y = Median_FNR)) +
+# Create the plot for PR-AUC
+pr_auc_plot <- ggplot(results, aes(x = strategy, y = pr_auc, fill = strategy)) +
   geom_bar(stat = "identity") +
-  labs(title = "Median FNR", y = "Median FNR")+ 
+  facet_wrap(~ dataset, nrow = 1) +
+  scale_fill_manual(values = strategy_colors) +
+  labs(title = "PR-AUC", y = "PR-AUC") + 
   theme_classic() +  
   theme(
-    #legend.position = "none",
     legend.title = element_blank(),
     legend.text = element_text(size = 16),
+    legend.position = "none",
+    legend.justification = "center",
     axis.text = element_text(size = 16),
-    axis.text.x = element_text(angle = 90, hjust = 1),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
     axis.title = element_blank(),
     axis.ticks.y = element_blank(),
+    axis.line = element_blank(),
     panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 16)
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    strip.background = element_rect(fill = "#8393C6"),
+    strip.text = element_text(color = "white", size = 12, face = "bold")
   )
 
-fnr_bar_plot
+# Arrange the plots in a single layout
+final_plot <- (precision_plot / fnr_plot / pr_auc_plot)
+
+# Display the plot
+final_plot
