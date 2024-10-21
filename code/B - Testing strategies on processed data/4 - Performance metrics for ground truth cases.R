@@ -1,16 +1,13 @@
 # SCRIPT CONTEXT 
 #
 # Benchmarking damaged cell detection strategies on ground truth dataset. This script begins with the strategies
-# already run on the ground truth cases. The labelled output objects (3 - Run remaining detection strategies.R)
-# are loaded at the start of the script. From here, the script uses the labels stored in the objects to 
-# calculate confusion metrics (TP, TN, FP, FN) for each strategy, followed by sensitivity and F1 scores.
-# The script then plots the sensitivity and F1 scores for each strategy
-# 
-# Still do : 
-# - confidence intervals for precision and false negative rate 
-# - finalize plots (new aesthetics, labels, etc)
-# - ranking plot : ranking calculation for each performance metric 
-#         - 10 for best, 9 second best ... sum across the datasets
+# already run on the ground truth cases. From here, the script uses the labels stored in the objects to 
+# calculate confusion metrics (TP, TN, FP, FN) for each strategy, followed by performance metrics: 
+#
+# 1. Precision 
+# 2. False Negative Rate (FNR)
+# 3. Precision-recall area under the curve (PR-AUC)
+
 
 
 #-------------------------------------------------------------------------------
@@ -317,37 +314,43 @@ df_long <- results %>%
   select(-precision_lower, -fnr_lower, -pr_auc_lower, -precision_upper, -fnr_upper, -pr_auc_upper) %>%
   distinct()
 
+
+# Define theme 
+performance_bar_theme <- function() {
+  theme_minimal() +  
+    theme(
+      legend.title = element_blank(),
+      legend.text = element_text(size = 16),
+      legend.position = "none",
+      legend.justification = "center",
+      axis.text = element_text(size = 16),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.title = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.line.x = element_line(color = "black"),
+      axis.line.y = element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.major.y = element_line(color = "grey"),
+      panel.grid.minor.y = element_line(color = "grey"),
+      panel.spacing = unit(1.5, "lines"),
+      panel.border = element_blank(),
+      plot.title = element_text(vjust = 3.8, face = "bold", size = 16),
+      strip.background = element_rect(fill = "white"),
+      strip.text = element_text(color = "black", size = 12, face = "bold"),
+      plot.margin = margin(10, 10, 50, 10)
+    )
+}
+
 # Precision plot 
 precision_plot <- ggplot(df_long %>% dplyr::filter(measure == "precision"), aes(x = strategy, y = value, fill = strategy)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
   scale_fill_manual(values = strategy_colors) +
-  labs(title = "Precision", y = "Precision") + 
-  theme_minimal() +  
-  theme(
-    legend.title = element_blank(),
-    legend.text = element_text(size = 16),
-    legend.position = "none",
-    legend.justification = "center",
-    axis.text = element_text(size = 16),
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    axis.title = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.x = element_line(color = "black"),
-    axis.line.y = element_blank(),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_line(color = "grey"),
-    panel.grid.minor.y = element_line(color = "grey"),
-    panel.spacing = unit(1.5, "lines"),
-    panel.border = element_blank(),
-    plot.title = element_text(vjust = 0.4, hjust = 0.5, face = "bold", size = 16),
-    strip.background = element_rect(fill = "white"),
-    strip.text = element_text(color = "black", size = 12, face = "bold"),
-    plot.margin = margin(10, 10, 50, 10)
-  )
+  labs(title = "a     Precision", y = "Precision") + 
+  performance_bar_theme() + theme(plot.title = element_text(hjust = -0.05))
 
 # FNR plot
 fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy, y = value, fill = strategy)) +
@@ -355,31 +358,8 @@ fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
   scale_fill_manual(values = strategy_colors) +
-  labs(title = "False Negative Rate (FNR)", y = "FNR") + 
-  theme_minimal() +  
-  theme(
-    legend.title = element_blank(),
-    legend.text = element_text(size = 16),
-    legend.position = "none",
-    legend.justification = "center",
-    axis.text = element_text(size = 16),
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    axis.title = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.x = element_line(color = "black"),
-    axis.line.y = element_blank(),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_line(color = "grey"),
-    panel.grid.minor.y = element_line(color = "grey"),
-    panel.spacing = unit(1.5, "lines"),
-    panel.border = element_blank(),
-    plot.title = element_text(vjust = 0.4, hjust = 0.5, face = "bold", size = 16),
-    strip.background = element_rect(fill = "white"),
-    strip.text = element_text(color = "black", size = 12, face = "bold"),
-    plot.margin = margin(10, 10, 50, 10) 
-  )
+  labs(title = "b     False Negative Rate (FNR)", y = "FNR") + 
+  performance_bar_theme() + theme(plot.title = element_text(hjust = -0.052))
 
 # PR-AUC plot
 pr_auc_plot <- ggplot(df_long %>% dplyr::filter(measure == "pr_auc"), aes(x = strategy, y = value, fill = strategy)) +
@@ -388,46 +368,28 @@ pr_auc_plot <- ggplot(df_long %>% dplyr::filter(measure == "pr_auc"), aes(x = st
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
   scale_fill_manual(values = strategy_colors) +
   scale_y_continuous(limits = c(0, 1), labels = scales::number_format(accuracy = 0.01)) +
-  labs(title = "Precision-Recall Area Under the Curve (PR-AUC)", y = "Precision") + 
-  theme_minimal() +  
+  labs(title = "c     Precision-Recall Area Under the Curve (PR-AUC)", y = "Precision") + 
+  performance_bar_theme() +
   theme(
-    legend.title = element_blank(),
-    legend.text = element_text(size = 16),
     legend.position = "bottom",
     legend.justification = "left",
-    axis.text = element_text(size = 16),
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    axis.title = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.line.x = element_line(color = "black"),
-    axis.line.y = element_blank(),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_line(color = "grey"),
-    panel.grid.minor.y = element_line(color = "grey"),
-    panel.spacing = unit(1.5, "lines"),
-    panel.border = element_blank(),
-    plot.title = element_text(vjust = 0.4, hjust = 0.5, face = "bold", size = 16),
-    strip.background = element_rect(fill = "white"),
-    strip.text = element_text(color = "black", size = 12, face = "bold"),
-    plot.margin = margin(10, 10, 20, 10) 
+    plot.title = element_text(hjust = -0.075),
+    plot.margin = margin(10, 10, 20, 10)  # Adjust margin for this specific plot
   )
-
 
 #-------------------------------------------------------------------------------
 # COMBINE PLOTS 
 #-------------------------------------------------------------------------------
 
-# Arrange the plots in a single layout with specified widths
-final_plot <- (precision_plot + ranked_precision + plot_layout(widths = c(5, 1))) /
-  (fnr_plot + ranked_fnr + plot_layout(widths = c(5, 1))) /
+# Arrange the plots in a single layout with specified widths and row labels
+final_plot <- (precision_plot + ranked_precision + plot_layout(widths = c(5, 1))) / 
+  (fnr_plot + ranked_fnr + plot_layout(widths = c(5, 1))) / 
   (pr_auc_plot + ranked_prauc + plot_layout(widths = c(5, 1)))
-
 
 # Save the plot
 ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/barplots_ranked.png"), 
        plot = final_plot , width = 18, height = 13, dpi = 300)
+
 ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/barplots_ranked.svg"), 
        plot = final_plot, width = 16, height = 13, dpi = 300)
 
