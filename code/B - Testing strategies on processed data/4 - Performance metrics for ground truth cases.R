@@ -36,7 +36,7 @@ PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.
 
 # List of methods
 methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
-             "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
+             "all", "mito_ribo", "mito", "malat1", "mito.isolated.")
 
 # Input structure
 input_list <- list(
@@ -241,7 +241,18 @@ ranked_results <- ranked_results %>%
   )
 
 # Colour palette
-strategy_colours <- c("#999FA9","#586667","#73966E","#415741","#65719E","#383F54","#E8E5D6","#A4A388","#8B3860","#522239")
+strategy_colours <- c(
+  "ddqc" = "#A799C9",
+  "DropletQC" = "#E7E4F6",
+  "ensembleKQC" = "#808C98", 
+  "miQC" = "#CED5DB", 
+  "valiDrops" = "#88A1BD",
+  "all" = "#D3E2F6",
+  "mito.isolated." = "#A6BEAE", 
+  "mito" = "#DCECE2", 
+  "mito_ribo" = "#9DBD78",
+  "malat1" = "#D7E7BE"
+)
 
 # Convert the strategy column to a factor with the specified order
 ranked_results$strategy <- factor(ranked_results$strategy, levels = methods)
@@ -332,10 +343,10 @@ performance_bar_theme <- function() {
       axis.line.y = element_blank(),
       panel.grid.major.x = element_blank(),
       panel.grid.minor.x = element_blank(),
-      panel.grid.major.y = element_line(color = "grey"),
-      panel.grid.minor.y = element_line(color = "grey"),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.y = element_blank(),
       panel.spacing = unit(1.5, "lines"),
-      panel.border = element_blank(),
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.8),
       plot.title = element_text(vjust = 3.8, face = "bold", size = 16),
       strip.background = element_rect(fill = "white"),
       strip.text = element_text(color = "black", size = 12, face = "bold"),
@@ -348,7 +359,7 @@ precision_plot <- ggplot(df_long %>% dplyr::filter(measure == "precision"), aes(
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
-  scale_fill_manual(values = strategy_colors) +
+  scale_fill_manual(values = strategy_colours) +
   labs(title = "a     Precision", y = "Precision") + 
   performance_bar_theme() + theme(plot.title = element_text(hjust = -0.05))
 
@@ -357,7 +368,7 @@ fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
-  scale_fill_manual(values = strategy_colors) +
+  scale_fill_manual(values = strategy_colours) +
   labs(title = "b     False Negative Rate (FNR)", y = "FNR") + 
   performance_bar_theme() + theme(plot.title = element_text(hjust = -0.052))
 
@@ -366,7 +377,7 @@ pr_auc_plot <- ggplot(df_long %>% dplyr::filter(measure == "pr_auc"), aes(x = st
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
-  scale_fill_manual(values = strategy_colors) +
+  scale_fill_manual(values = strategy_colours) +
   scale_y_continuous(limits = c(0, 1), labels = scales::number_format(accuracy = 0.01)) +
   labs(title = "c     Precision-Recall Area Under the Curve (PR-AUC)", y = "Precision") + 
   performance_bar_theme() +
@@ -388,9 +399,9 @@ final_plot <- (precision_plot + ranked_precision + plot_layout(widths = c(5, 1))
 
 # Save the plot
 ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/barplots_ranked.png"), 
-       plot = final_plot , width = 18, height = 13, dpi = 300)
+       plot = final_plot , width = 25, height = 19, dpi = 300, limitsize = FALSE)
 
 ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/barplots_ranked.svg"), 
-       plot = final_plot, width = 16, height = 13, dpi = 300)
+       plot = final_plot, width = 20, height = 13, dpi = 300)
 
 

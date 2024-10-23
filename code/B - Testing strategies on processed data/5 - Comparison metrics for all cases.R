@@ -50,16 +50,16 @@ mPBMC <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mPBMC.c
 # Define palette
 
 strategy_colours <- c(
-  "ddqc" = "#999FA9",
-  "DropletQC" = "#586667", 
-  "ensembleKQC" = "#73966E",
-  "miQC" = "#415741",
-  "valiDrops" = "#65719E", 
-  "all" = "#383F54",
-  "mito.isolated." = "#E8E5D6", 
-  "mito" = "#A4A388",
-  "mito_ribo" = "#8B3860", 
-  "malat1" = "#522239"
+  "ddqc" = "#A799C9",
+  "DropletQC" = "#E7E4F6",
+  "ensembleKQC" = "#808C98", 
+  "miQC" = "#CED5DB", 
+  "valiDrops" = "#88A1BD",
+  "all" = "#D3E2F6",
+  "mito.isolated." = "#A6BEAE", 
+  "mito" = "#DCECE2", 
+  "mito_ribo" = "#9DBD78",
+  "malat1" = "#D7E7BE"
 )
 
 # Define the desired order
@@ -198,19 +198,17 @@ non_groundtruth_df <- non_groundtruth_df %>%
 
 # Edit colours 
 strategy_colours <- c(
-  "ddqc   "= "#999FA9",
-  "DropletQC     " = "#586667", 
-  "ensembleKQC    " = "#73966E",
-  "miQC   " = "#415741",
-  "valiDrops   " = "#65719E", 
-  "all    " = "#383F54",
-  "mito (isolated)      " = "#E8E5D6", 
-  "mito   " = "#A4A388",
-  "mito_ribo   " = "#8B3860", 
-  "malat1   " = "#522239"
+  "ddqc   " = "#A799C9",
+  "DropletQC     " = "#E7E4F6",
+  "ensembleKQC    " = "#808C98", 
+  "miQC   "  = "#CED5DB", 
+  "valiDrops   " = "#88A1BD", 
+  "all    " = "#D3E2F6",
+  "mito (isolated)      " = "#A6BEAE",
+  "mito   "  = "#DCECE2", 
+  "mito_ribo   " = "#9DBD78", 
+  "malat1   " = "#D7E7BE"
 )
-
-
 
 # Damaged proportion plots
 proportion_damaged_groundtruth_plot <- ggplot(groundtruth_df, aes(x = strategy, y = median_value, fill = strategy)) +
@@ -414,17 +412,18 @@ groundtruth_cudf <- groundtruth_cudf %>%
 groundtruth_udf$correct_percent <- groundtruth_cudf$correct_percent
 
 strategy_colours <- c(
-  "ddqc" = "#999FA9",
-  "DropletQC" = "#586667", 
-  "ensembleKQC" = "#73966E",
-  "miQC" = "#415741",
-  "valiDrops" = "#65719E", 
-  "all" = "#383F54",
-  "mito.isolated." = "#E8E5D6", 
-  "mito" = "#A4A388",
-  "mito_ribo" = "#8B3860", 
-  "malat1" = "#522239"
+  "ddqc" = "#A799C9",
+  "DropletQC" = "#E7E4F6",
+  "ensembleKQC" = "#808C98", 
+  "miQC" = "#CED5DB", 
+  "valiDrops" = "#88A1BD",
+  "all" = "#D3E2F6",
+  "mito.isolated." = "#A6BEAE", 
+  "mito" = "#DCECE2", 
+  "mito_ribo" = "#9DBD78",
+  "malat1" = "#D7E7BE"
 )
+
 
 # Proportion unique plots 
 proportion_unique_groundtruth_plot <- ggplot(groundtruth_udf, aes(x = strategy, y = median_value, fill = strategy)) +
@@ -594,24 +593,26 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
   
   
   # Name the rows & columns 
+  
   strategy_colours <- c(
-    "ddqc" = "#999FA9",
-    "DropletQC" = "#586667",
-    "ensembleKQC" = "#73966E",
-    "miQC" = "#415741",
-    "valiDrops" = "#65719E",
-    "all" = "#383F54",
-    "mito (isolated)" = "#E8E5D6",
-    "mito" = "#A4A388",
-    "mito (ribo)" = "#8B3860",
-    "malat1" = "#522239"
+    "ddqc" = "#A799C9",
+    "DropletQC" = "#E7E4F6",
+    "ensembleKQC" = "#808C98", 
+    "miQC" = "#CED5DB", 
+    "valiDrops" = "#88A1BD",
+    "all" = "#D3E2F6",
+    "mito (isolated)" = "#A6BEAE", 
+    "mito" = "#DCECE2", 
+    "mito (ribo)" = "#9DBD78",
+    "malat1" = "#D7E7BE"
   )
+  
   
   
   # Plot without legend (clustered viewing)
   pca_plot <- ggplot(pca_coords, aes(x = PC1, y = PC2, fill = tool, label = tool)) +
     geom_point(size = 10, shape = 21, color = "white") +  
-    geom_text_repel(aes(label = tool, nudge_y = nudge_y), size = 8, color = "black", segment.color = "grey", segment.size = 0.5, direction = "both") +
+    # geom_text_repel(aes(label = tool, nudge_y = nudge_y), size = 8, color = "black", segment.color = "grey", segment.size = 0.5, direction = "both") +
     scale_fill_manual(values = strategy_colours) +
     theme_classic() +
     labs(title = title,
@@ -649,18 +650,20 @@ similarity_plots
 # Consistency scoring metrics  ----
 
 # consistency = (weighting constant x similarity deviation) + (weighting constant x proportion damaged detection deviation
+
 strategy_colours <- c(
-  "ddqc" = "#999FA9",
-  "DropletQC" = "#586667", 
-  "ensembleKQC" = "#73966E",
-  "miQC" = "#415741",
-  "valiDrops" = "#65719E", 
-  "all" = "#383F54",
-  "mito.isolated." = "#E8E5D6", 
-  "mito" = "#A4A388",
-  "mito_ribo" = "#8B3860", 
-  "malat1" = "#522239"
+  "ddqc" = "#A799C9",
+  "DropletQC" = "#E7E4F6",
+  "ensembleKQC" = "#808C98", 
+  "miQC" = "#CED5DB", 
+  "valiDrops" = "#88A1BD",
+  "all" = "#D3E2F6",
+  "mito.isolated." = "#A6BEAE", 
+  "mito" = "#DCECE2", 
+  "mito_ribo" = "#9DBD78",
+  "malat1" = "#D7E7BE"
 )
+
 
 calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
   
@@ -773,29 +776,29 @@ consistency_groundtruth_plot / consistency_non_groundtruth_plot
 
 # Combine plots ----
 
-# # Quick calculation of total cell numbers for labels 
-data_frames <- list(A549, dLiver, dLung, dPBMC, ductal, 
-                    glio, HCT116, hLiver, hLung, hodgkin, 
-                    hPBMC, Jurkat, mLiver, mLung, mPBMC,
-                    apoptotic, pro_apoptotic, GM18507_dead, GM18507_dying, PDX)
-
-
-# Total cell number
-total_entries <- 0
-for (df in data_frames) {
-  total_entries <- total_entries + dim(df)[1]
-}
-
-# Median cell number from all datasets 
-cell_numbers <- data.frame(cell_number = c(
-  dim(A549)[1], dim(dLiver)[1], dim(dLung)[1], dim(dPBMC)[1], dim(ductal)[1], 
-  dim(glio)[1], dim(HCT116)[1], dim(hLiver)[1], dim(hLung)[1], dim(hodgkin)[1], 
-  dim(hPBMC)[1], dim(Jurkat)[1], dim(mLiver)[1], dim(mLung)[1], dim(mPBMC)[1],
-  dim(apoptotic)[1], dim(pro_apoptotic)[1], dim(GM18507_dead)[1], dim(GM18507_dying)[1], dim(PDX)[1]))
-
-
-median_value <- median(cell_numbers$cell_number)
-print(median_value)
+# # # Quick calculation of total cell numbers for labels 
+# data_frames <- list(A549, dLiver, dLung, dPBMC, ductal, 
+#                     glio, HCT116, hLiver, hLung, hodgkin, 
+#                     hPBMC, Jurkat, mLiver, mLung, mPBMC,
+#                     apoptotic, pro_apoptotic, GM18507_dead, GM18507_dying, PDX)
+# 
+# 
+# # Total cell number
+# total_entries <- 0
+# for (df in data_frames) {
+#   total_entries <- total_entries + dim(df)[1]
+# }
+# 
+# # Median cell number from all datasets 
+# cell_numbers <- data.frame(cell_number = c(
+#   dim(A549)[1], dim(dLiver)[1], dim(dLung)[1], dim(dPBMC)[1], dim(ductal)[1], 
+#   dim(glio)[1], dim(HCT116)[1], dim(hLiver)[1], dim(hLung)[1], dim(hodgkin)[1], 
+#   dim(hPBMC)[1], dim(Jurkat)[1], dim(mLiver)[1], dim(mLung)[1], dim(mPBMC)[1],
+#   dim(apoptotic)[1], dim(pro_apoptotic)[1], dim(GM18507_dead)[1], dim(GM18507_dying)[1], dim(PDX)[1]))
+# 
+# 
+# median_value <- median(cell_numbers$cell_number)
+# print(median_value)
 
 
 
