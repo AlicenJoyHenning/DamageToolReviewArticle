@@ -1,2 +1,5 @@
-# Script to generate simulated scRNA-seq datasets and add damaged cells 
-
+# SCRIPT CONTEXT 
+#
+# Simulate datasets with set number of cell types, known set of DEGs. 
+# In
+#

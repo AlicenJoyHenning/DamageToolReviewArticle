@@ -1,7 +1,7 @@
 # SCRIPT CONTEXT 
 #
 # Benchmarking damaged cell detection strategies. The labelled output objects are loaded at the start of the script. 
-# (3 - Run remaining detection strategies.R) From here, the script uses the labels stored in the objects to calculate: 
+#   (3 - Run remaining detection strategies.R) From here, the script uses the labels stored in the objects to calculate: 
 #
 # 1. The proportion of damaged cells for each tool - violin plot 
 # 2. The similarity between the tools (Cohen's Kappa)-  PCA plots
@@ -221,10 +221,11 @@ proportion_damaged_groundtruth_plot <- ggplot(groundtruth_df, aes(x = strategy, 
   barplot_theme() + 
   theme(plot.title = element_text(hjust = -0.4, size = 22), 
         plot.margin = margin(50, 20, 50, 30), 
+        legend.text = element_text(size = 22),
         legend.spacing.x = unit(1.0, 'cm'), 
         legend.position = "bottom",
         legend.justification = c(-0.05, -0.2)) + 
-  guides(fill = guide_legend(nrow = 1, keywidth=0.2, keyheight=0.1,default.unit="inch")) + ylim(0, 100)
+  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1,default.unit="inch")) + ylim(0, 100)
 
 proportion_damaged_non_groundtruth_plot <- ggplot(non_groundtruth_df, aes(x = strategy, y = median_value, fill = strategy)) +
   geom_bar(stat = "identity") +
@@ -232,13 +233,14 @@ proportion_damaged_non_groundtruth_plot <- ggplot(non_groundtruth_df, aes(x = st
   scale_fill_manual(values = strategy_colours) +
   labs(title = "a     Damaged proportion", y = "") + 
   barplot_theme() + 
-  theme(plot.title = element_text(hjust = -0.4, size = 22), 
+  theme(plot.title = element_text(hjust = -0.4, size = 24), 
         plot.margin = margin(50, 20, 50, 30),  
         legend.spacing.x = unit(1.0, 'cm'), 
+        legend.text = element_text(size = 22),
         legend.position = "bottom",
         legend.key.width = unit(0.6, 'cm'),
         legend.justification = c(-0.05, -0.2)) + 
-  guides(fill = guide_legend(nrow = 1, keywidth=0.2, keyheight=0.1,default.unit="inch")) + ylim(0, 100)
+  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1,default.unit="inch")) + ylim(0, 100)
 
 
 
@@ -411,12 +413,24 @@ groundtruth_cudf <- groundtruth_cudf %>%
  # Add the percent correctness to ground truth data frame
 groundtruth_udf$correct_percent <- groundtruth_cudf$correct_percent
 
+strategy_colours <- c(
+  "ddqc" = "#999FA9",
+  "DropletQC" = "#586667", 
+  "ensembleKQC" = "#73966E",
+  "miQC" = "#415741",
+  "valiDrops" = "#65719E", 
+  "all" = "#383F54",
+  "mito.isolated." = "#E8E5D6", 
+  "mito" = "#A4A388",
+  "mito_ribo" = "#8B3860", 
+  "malat1" = "#522239"
+)
 
 # Proportion unique plots 
 proportion_unique_groundtruth_plot <- ggplot(groundtruth_udf, aes(x = strategy, y = median_value, fill = strategy)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
-  geom_text(aes(y = highest_value + 5, label = ifelse(median_value != 0, paste0(correct_percent, " %"), "")), vjust = 0, hjust = 0.4, size = 4.8) +
+  geom_text(aes(y = highest_value + 5, label = ifelse(median_value != 0, correct_percent, "")), vjust = 0, hjust = 0.4, size = 6) +
   scale_fill_manual(values = strategy_colours) +
   labs(title = "b     Unique damaged proportion", y = "") + 
   barplot_theme() + 
@@ -597,7 +611,7 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
   # Plot without legend (clustered viewing)
   pca_plot <- ggplot(pca_coords, aes(x = PC1, y = PC2, fill = tool, label = tool)) +
     geom_point(size = 10, shape = 21, color = "white") +  
-    geom_text_repel(aes(label = tool, nudge_y = nudge_y), size = 5, color = "black", segment.color = "grey", segment.size = 0.5, direction = "both") +
+    geom_text_repel(aes(label = tool, nudge_y = nudge_y), size = 8, color = "black", segment.color = "grey", segment.size = 0.5, direction = "both") +
     scale_fill_manual(values = strategy_colours) +
     theme_classic() +
     labs(title = title,
@@ -760,18 +774,37 @@ consistency_groundtruth_plot / consistency_non_groundtruth_plot
 # Combine plots ----
 
 # # Quick calculation of total cell numbers for labels 
-# data_frames <- list(A549, dLiver, dLung, dPBMC, ductal, glio, HCT116, hLiver, hLung, hodgkin, hPBMC, Jurkat, mLiver, mLung, mPBMC)
-# total_entries <- 0
-# for (df in data_frames) {
-#   total_entries <- total_entries + dim(df)[1]
-# }
+data_frames <- list(A549, dLiver, dLung, dPBMC, ductal, 
+                    glio, HCT116, hLiver, hLung, hodgkin, 
+                    hPBMC, Jurkat, mLiver, mLung, mPBMC,
+                    apoptotic, pro_apoptotic, GM18507_dead, GM18507_dying, PDX)
+
+
+# Total cell number
+total_entries <- 0
+for (df in data_frames) {
+  total_entries <- total_entries + dim(df)[1]
+}
+
+# Median cell number from all datasets 
+cell_numbers <- data.frame(cell_number = c(
+  dim(A549)[1], dim(dLiver)[1], dim(dLung)[1], dim(dPBMC)[1], dim(ductal)[1], 
+  dim(glio)[1], dim(HCT116)[1], dim(hLiver)[1], dim(hLung)[1], dim(hodgkin)[1], 
+  dim(hPBMC)[1], dim(Jurkat)[1], dim(mLiver)[1], dim(mLung)[1], dim(mPBMC)[1],
+  dim(apoptotic)[1], dim(pro_apoptotic)[1], dim(GM18507_dead)[1], dim(GM18507_dying)[1], dim(PDX)[1]))
+
+
+median_value <- median(cell_numbers$cell_number)
+print(median_value)
+
+
 
 
 # Create titles
 groundtruth_title <- ggdraw() + 
   draw_label("Ground truth datasets (n = 6, cells = 40 604)", 
              fontface = 'bold', 
-             size = 22,
+             size = 24,
              x = 0, 
              hjust = -0.12) + 
   theme(plot.margin = margin(0, 0, -50, 2))
@@ -779,9 +812,9 @@ groundtruth_title <- ggdraw() +
 non_groundtruth_title <- ggdraw() + 
   draw_label("Non-ground truth datasets (n = 15, cells = 94 603)", 
              fontface = 'bold', 
-             size = 22,
+             size = 24,
              x = 0, 
-             hjust = -0.1) + 
+             hjust = -0.11) + 
   theme(plot.margin = margin(0, 0, -50, 2))
 
 # Arrange the groundtruth plots
@@ -829,7 +862,7 @@ final_plot <- plot_grid(
 ) + theme(plot.background = element_rect(fill = "white", color = NA))
 
 # Save the final plot as a PNG with appropriate dimensions
-ggsave("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/comparison_metrics.png", plot = final_plot, width = 38, height = 17, units = "in")
+ggsave("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/comparison_metrics.png", plot = final_plot, width = 38, height = 18, units = "in")
 
 
 ### End 
