@@ -26,28 +26,28 @@ library(scDesign)
 # TRIALS 
 #-------------------------------------------------------------------------------
 
-# Getting standard PBMC dataset to build the simulated data
-library(BiocManager)
-BiocManager::install("scRNAseq")
-library(scRNAseq) # only contains 3 tiny datasets 
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("IRanges")
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("Biobase")
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("S4Vectors")
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("SummarizedExperiment")
 
-# Looking for PBMC dataset ~ 6000 cells 
-?scRNAseq
+library(devtools)
+devtools::install_github("YosefLab/SymSim")
+library(SymSim)
 
-library(scater)
-help(package = "scater")
+??SymSim
 
+test_sim <- SimulateTrueCounts(ncells_total = 500, ngenes = 2000, randseed =  777)
 
-# design_data() creates a new scRNA-seq matrix using an existing one 
-realcount1 = readRDS(system.file("extdata", "astrocytes.rds", package = "scDesign"))
-simcount1 = design_data(realcount = realcount1, 
-                        S = 1e7, 
-                        ncell = 1000, 
-                        ngroup = 1, 
-                        ncores = 1)
-
-
-simcount1[1:3, 1:3]
-
-realcount1
+meta_data <- test_sim$cell_meta
+counts <- test_sim$counts
+rownames(counts)
 
