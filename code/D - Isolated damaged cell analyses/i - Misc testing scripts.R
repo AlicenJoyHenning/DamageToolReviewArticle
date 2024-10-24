@@ -2,8 +2,7 @@
 
 # A: WHAT IS the difference between the 2 dead cell populations in each case? (DGEA & PCA)
 # B: When viewed WITH healthy cells, is the "hidden" damaged cell population visible in each case?
-# C: When viewing ALL DEAD cell populations together, how consistently do the two types of dead cell populations 
-divide?
+# C: When viewing ALL DEAD cell populations together, how consistently do the two types of dead cell populations divide?
 
 
 library(Seurat)
@@ -18,6 +17,78 @@ library(scCustomize)
 # library(Matrix)
 
 
+
+# Find damaged cell signature 
+
+# Function to extract helpful information 
+createloupe <- function(seurat, damage_string, control_string){
+  
+  # Isolate cells of interest, stringent live and dead subsets 
+  seurat <- subset(seurat, (orig.ident == control_string & mt.percent <= 20 ) | (orig.ident == damage_string & mt.percent >= 25 ))
+  
+  # Prepare for loupeR
+  seurat <- JoinLayers(seurat)
+  seurat <- NormalizeData(seurat) %>% 
+    FindVariableFeatures() %>% 
+    ScaleData() %>% 
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>% 
+    FindClusters() %>% 
+    RunUMAP(dims = 1:30)
+  
+  
+  # Create the individual components 
+  count_loupe  <- seurat[["RNA"]]$counts
+  count_loupe <- Matrix(as.matrix(count_loupe), sparse = TRUE)
+  clusters <- select_clusters(seurat)
+  clusters <- as.list(clusters)
+  projections <- as.list(select_projections(seurat))
+  
+  # Run function to create loupe file 
+  create_loupe(
+    count_mat = count_loupe,
+    clusters = clusters,
+    projections = projections,
+    output_dir = "/home/alicen/Projects/ReviewArticle/damage_perturbation/LoupeR/",
+    output_name = damage_string,
+    seurat_obj_version = "5.0.1",
+    force = TRUE
+  )
+  
+  return()
+  
+}
+
+object_list <- list(
+  list(seurat = GM18507_dead, damage_string = "GM18507_dead", control_string = "GM18507_control"), 
+  list(seurat = GM18507_dying, damage_string = "GM18507_dying", control_string = "GM18507_control"), 
+  list(seurat = HEK293_apo, damage_string = "HEK293_apoptotic", control_string = "HEK293_control"), 
+  list(seurat = PDX_dead, damage_string = "PDX_dead", control_string = "PDX_control"))
+
+
+for (object in object_list){
+  
+  createloupe(seurat = object$seurat, 
+              damage_string = object$damage_string,
+              control_string = object$control_string
+  )
+  
+}
+
+
+# Read in the DEGs from LoupeR 
+GM18507_dead_DEGs <- read.csv("/home/alicen/Projects/ReviewArticle/damage_perturbation/DEGs/GM18507_dead.csv")
+GM18507_dying_DEGs <- read.csv("/home/alicen/Projects/ReviewArticle/damage_perturbation/DEGs/GM18507_dying.csv")
+HEK293_apo_DEGs <- read.csv("/home/alicen/Projects/ReviewArticle/damage_perturbation/DEGs/HEK293_apoptotic.csv")
+PDX_dead_DEGs <- read.csv("/home/alicen/Projects/ReviewArticle/damage_perturbation/DEGs/PDX_dead.csv")
+
+DEG_list <- list(GM18507_dead_DEGs, GM18507_dying_DEGs, HEK293_apo_DEGs, PDX_dead_DEGs)
+
+UP <- list()
+
+for (DEG in DEG_list) {
+  UP <- append(UP, list(subset(DEG, damaged.Log2.Fold.Change >= 0)))
+}
 # Read in data ------
 
 # TENX049_SA928_001_sceset

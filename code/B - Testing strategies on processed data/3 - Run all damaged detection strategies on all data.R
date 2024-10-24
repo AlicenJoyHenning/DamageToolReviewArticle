@@ -9,9 +9,9 @@
 # 1. ddqc (loading results)
 # 2. ensembleKQC (loading results)
 # 3. DropletQC : package functions 
-# 4. miQC : select best model 
+# 4. miQC : select best model
 # 5. valiDrops : modified function 
-# 6. 
+# + scater PCA 
 #
 # NB: 
 # - Output from ddqc and ensembleKQC must be done
