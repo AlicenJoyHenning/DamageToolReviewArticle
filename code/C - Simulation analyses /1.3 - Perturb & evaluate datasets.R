@@ -1,13 +1,13 @@
 # SCRIPT CONTEXT 
 #
-# Identify a conserved signature of damaged cells to develop a function 
+# Use traditional concept of damaged cells to develop a function 
 # that when applied to input data will perturb them to resemble damaged cells.  
 # The idea is that the only truth we have is to add a known amount of damage to cases, 
 # perform HVG and DEG identification compared to the case without perturbations,
 # then see how well tool filter the perturbed data to mitigate the downstream 
 # confounding effects of the perturbation. 
 #
-# This script explores the true damaged populations and thier control counterparts, 
+# This script generate damaged populations from the simulated data,  
 # isolates model 
 #   Case 1: 0 - 5 % damage
 #   Case 2: 5 - 10 % damage
@@ -33,4 +33,9 @@ for (pkg in packages) {
 #-------------------------------------------------------------------------------
 # Load datasets  
 #-------------------------------------------------------------------------------
+
+
+# Simulated data ----
+
+
 

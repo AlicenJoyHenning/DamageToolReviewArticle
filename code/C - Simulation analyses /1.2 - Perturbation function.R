@@ -29,18 +29,20 @@ for (pkg in packages) {
   }
 }
 
+# Read in simulated data ----
+control_sim_1 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_sim_1_seurat.rds")
+control_sim_2 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_sim_2_seurat.rds")
+control_sim_3 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_sim_3_seurat.rds")
+stimulated_sim_1 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_1_seurat.rds")
+stimulated_sim_2 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_2_seurat.rds")
+stimulated_sim_3 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_3_seurat.rds")
+
+
+#seurat <- control_sim_1
 
 #-------------------------------------------------------------------------------
-# Damage Perturbation Function 
+# Preparations
 #-------------------------------------------------------------------------------
-
-# Function to perturb input count matrix to mirror a conventional damaged state by cellular burst. 
-# To do so, we: 
-# 
-# 1. Reduce the expression of all cytoplasmic genes already expressed in the cell, mimicking partial loss of RNA transcripts (decreases UMI count) 
-# 2. Remove the expression of a random subset cytoplasmic genes (make expression 0), mimicking complete loss of RNA transcripts (decreases feature count)
-# NB: 
-
 
 # Gene annotations for mitochondrial and nuclear localised transcripts -----
 
@@ -59,7 +61,6 @@ mt_genes <- human_annotations %>%
   dplyr::filter(grepl("MT-", gene_name) | grepl("mitochondrial", description, ignore.case = TRUE)) %>%
   pull(gene_name)
 
-
 mt_genes <- append("MALAT1", mt_genes)
 
 # Remove empty entries
@@ -75,18 +76,48 @@ nuclear_genes <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name'),
 
 
 
+
+#-------------------------------------------------------------------------------
+# Damage Perturbation Function 
+#-------------------------------------------------------------------------------
+
+# Function to perturb input count matrix to mirror a conventional damaged state by cellular burst. 
+# To do so, we: 
+# 
+# 1. Reduce the expression of all cytoplasmic genes already expressed in the cell, mimicking partial loss of RNA transcripts (decreases UMI count) 
+# 2. Remove the expression of a random subset cytoplasmic genes (make expression 0), mimicking complete loss of RNA transcripts (decreases feature count)
+
 # Function to perturb a single cell's gene expression profile
-introducePerturb_helper <- function(cell_counts, mito_genes) {
+introducePerturb_helper <- function(seurat, mito_genes, percent_damage) {
+  
+  # Extract cells ----
+  
+  # Extract percentage of cells at random, these will be altered and then reintroduced 
+  damaged_cell_number <- round(((percent_damage/100) * (dim(seurat)[2])), 0)
+  damaged_cell_selections <- sample(rownames(seurat@meta.data), damaged_cell_number)
+  damaged <- subset(seurat, cells = damaged_cell_selections)
+  damaged_matrix <- damaged@assays$RNA$counts
+  
+  # Remove these cells from the seurat object
+  all_cells <- WhichCells(seurat)
+  remaining_cells <- setdiff(all_cells, damaged_cell_selections)
+  seurat <- subset(seurat, cells = remaining_cells)
+  
+  
+  
+  # Perturb cells -----
   
   # Randomly generate a target mitochondrial percentage between 60 and 100 for the cell
   target_mito_pct <- runif(1, min = 60, max = 100)
   
   # Separate mitochondrial and non-mitochondrial gene counts
-  mito_counts <- cell_counts[mito_genes]
-  non_mito_counts <- cell_counts[!mito_genes]
+  all_genes <- rownames(damaged_matrix)
+  non_mito_genes <- all_genes[!(all_genes %in% mito_genes)]
+  mito_counts <- damaged_matrix[mito_genes]
+  non_mito_counts <- damaged_matrix[non_mito_genes]
   
   # Calculate current mitochondrial percentage
-  current_mito_pct <- sum(mito_counts) / sum(cell_counts) * 100
+  current_mito_pct <- sum(mito_counts) / sum(damaged_matrix) * 100
   
   # If the current percentage is already higher than or equal to the target, return the cell unchanged
   if (current_mito_pct >= target_mito_pct) {
