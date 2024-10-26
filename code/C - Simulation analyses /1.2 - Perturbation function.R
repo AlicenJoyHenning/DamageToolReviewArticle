@@ -202,8 +202,8 @@ introducePerturb <- function(seurat,
   combined_seurat$celltype <- ifelse(combined_seurat$orig.ident == "damaged", "damaged", combined_seurat$celltype)
   
   # Save outputs 
-  saveRDS(combined_seurat, file.path(output_dir, paste0(project_name, "_", percent_damage, ".rds")))
-  write.csv(combined_matrix, file.path(output_dir, paste0(project_name, "_", percent_damage, "_matrix.csv")))
+  saveRDS(combined_seurat, file.path(output_dir, paste0(project_name, ".rds")))
+  write.csv(combined_matrix, file.path(output_dir, paste0(project_name, "_matrix.csv")))
   
   
   # Visualise the output
