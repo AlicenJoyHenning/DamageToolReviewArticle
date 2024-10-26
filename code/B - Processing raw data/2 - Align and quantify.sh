@@ -2,7 +2,9 @@
 
 # Script to perform STARsolo alignment 
 # Edit the < > enclosed fields to match your file paths and names. 
-# For the FASTQ files, the following shows the case where  more than one lane is present, and the paths are separate with commas. If only one lane is present, use single input. 
+# For the FASTQ files, the following shows the case where  more than one lane is present with the paths separated by commas.
+# If only one lane is present, use single input. 
+#
 # Note: This script is the general case (3' protocol). For alternatives, see the Walk through document
 
 #PBS -P <Project>
