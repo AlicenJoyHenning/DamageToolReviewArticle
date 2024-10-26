@@ -1,14 +1,13 @@
 # SCRIPT CONTEXT 
 #
-# Identify a conserved signature of damaged cells to develop a function 
-# that when applied to input data will perturb them to resemble damaged cells.  
+# Using a traditional concept of damaged cells, develop a function 
+# that, when applied to input data, will create perturbations to resemble damaged cells.  
 # The idea is that the only truth we have is to add a known amount of damage to cases, 
 # perform HVG and DEG identification compared to the case without perturbations,
 # then see how well tool filter the perturbed data to mitigate the downstream 
 # confounding effects of the perturbation. 
 #
-# This script explores the true damaged populations and thier control counterparts, 
-# isolates model 
+# This script creates the following cases: 
 #   Case 1: 0 - 5 % damage
 #   Case 2: 5 - 10 % damage
 #   Case 3: 10 - 15 % damage
@@ -38,7 +37,7 @@ stimulated_sim_2 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturba
 stimulated_sim_3 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_3_seurat.rds")
 
 
-#seurat <- control_sim_1
+
 
 #-------------------------------------------------------------------------------
 # Preparations
@@ -54,27 +53,19 @@ Hsap_ahDb <- query(ah, pattern = c("Homo sapien", "EnsDb"), ignore.case = TRUE)
 Hsap_versions <- mcols(Hsap_ahDb) 
 Hsap_latest_version <- tail(rownames(Hsap_versions), n = 1)
 Hsap_edb <- ah[[Hsap_latest_version]]
-human_annotations <- genes(Hsap_edb, return.type = "data.frame")   
+annotations <- genes(Hsap_edb, return.type = "data.frame")   
 
 # Extract mitochondrial gene subsets
-mt_genes <- human_annotations %>%
+mt_genes <- annotations %>%
   dplyr::filter(grepl("MT-", gene_name) | grepl("mitochondrial", description, ignore.case = TRUE)) %>%
   pull(gene_name)
-
-mt_genes <- append("MALAT1", mt_genes)
 
 # Remove empty entries
 mt_genes <- mt_genes[mt_genes != ""]
 mito_genes <- mt_genes
 
-# Nuclear localised genes 
-ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
-nuclear_genes <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name'),
-                       filters = 'go', 
-                       values = c('GO:0048471', 'GO:001660'), 
-                       mart = ensembl)
-
-
+# Introduce consistently-expressed and nuclear localized genes 
+mito_genes <- append(c("MALAT1", "NEAT1", "XIST", "TSIX", "TUG1", "MEG3", "RN7SL1", "RPPH1"), mito_genes)
 
 
 #-------------------------------------------------------------------------------
@@ -87,135 +78,215 @@ nuclear_genes <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name'),
 # 1. Reduce the expression of all cytoplasmic genes already expressed in the cell, mimicking partial loss of RNA transcripts (decreases UMI count) 
 # 2. Remove the expression of a random subset cytoplasmic genes (make expression 0), mimicking complete loss of RNA transcripts (decreases feature count)
 
+
+#seurat <- control_sim_1
+
 # Function to perturb a single cell's gene expression profile
-introducePerturb_helper <- function(seurat, mito_genes, percent_damage) {
+perturb_single_cell <- function(count_matrix, mito_genes) {
   
-  # Extract cells ----
+  # Convert count matrix to matrix for manipulation
+  count_matrix <- as.matrix(count_matrix)
   
-  # Extract percentage of cells at random, these will be altered and then reintroduced 
-  damaged_cell_number <- round(((percent_damage/100) * (dim(seurat)[2])), 0)
-  damaged_cell_selections <- sample(rownames(seurat@meta.data), damaged_cell_number)
-  damaged <- subset(seurat, cells = damaged_cell_selections)
-  damaged_matrix <- damaged@assays$RNA$counts
+  # Identify mitochondrial and non-mitochondrial gene indices
+  mito_idx <- rownames(count_matrix) %in% mito_genes
+  non_mito_idx <- !mito_idx
   
-  # Remove these cells from the seurat object
-  all_cells <- WhichCells(seurat)
-  remaining_cells <- setdiff(all_cells, damaged_cell_selections)
-  seurat <- subset(seurat, cells = remaining_cells)
+  # Precompute mitochondrial and non-mitochondrial gene sums for each cell
+  mito_counts <- colSums(count_matrix[mito_idx, , drop=FALSE])
+  non_mito_counts <- colSums(count_matrix[non_mito_idx, , drop=FALSE])
+  total_counts <- colSums(count_matrix)
   
+  # Randomly assign target mitochondrial percentages for each cell
+  target_mito_pct <- runif(ncol(count_matrix), min = 20, max = 100)
   
+  # Calculate the target mitochondrial counts for each cell
+  target_mito_counts <- total_counts * (target_mito_pct / 100)
   
-  # Perturb cells -----
+  # Initial random reduction factors with added variability for each cell
+  reduction_factors <- (total_counts - target_mito_counts) / non_mito_counts
+  reduction_factors <- reduction_factors * runif(ncol(count_matrix), min = 0.9, max = 1.1)
   
-  # Randomly generate a target mitochondrial percentage between 60 and 100 for the cell
-  target_mito_pct <- runif(1, min = 60, max = 100)
-  
-  # Separate mitochondrial and non-mitochondrial gene counts
-  all_genes <- rownames(damaged_matrix)
-  non_mito_genes <- all_genes[!(all_genes %in% mito_genes)]
-  mito_counts <- damaged_matrix[mito_genes]
-  non_mito_counts <- damaged_matrix[non_mito_genes]
-  
-  # Calculate current mitochondrial percentage
-  current_mito_pct <- sum(mito_counts) / sum(damaged_matrix) * 100
-  
-  # If the current percentage is already higher than or equal to the target, return the cell unchanged
-  if (current_mito_pct >= target_mito_pct) {
-    return(cell_counts)
+  # Apply each cell's reduction factor and adjust further if below target
+  for (i in seq_len(ncol(count_matrix))) {
+    # Initial reduction for non-mitochondrial genes
+    count_matrix[non_mito_idx, i] <- count_matrix[non_mito_idx, i] * reduction_factors[i]
+    
+    # Recalculate mitochondrial percentage after reduction
+    mito_sum <- sum(count_matrix[mito_idx, i])
+    non_mito_sum <- sum(count_matrix[non_mito_idx, i])
+    final_mito_pct <- mito_sum / (mito_sum + non_mito_sum) * 100
+    
+    # Adjust further if mitochondrial percentage is below the target
+    while (final_mito_pct < target_mito_pct[i]) {
+      # Incrementally decrease non-mitochondrial counts
+      count_matrix[non_mito_idx, i] <- count_matrix[non_mito_idx, i] * 0.98
+      non_mito_sum <- sum(count_matrix[non_mito_idx, i])
+      final_mito_pct <- mito_sum / (mito_sum + non_mito_sum) * 100
+    }
+    
+    # Optional: display the current cell iteration and final mito percentage
+    cat("Processed cell", i, "- Target mito%", round(target_mito_pct[i], 2), 
+        "- Final mito%", round(final_mito_pct, 2), "\n")
   }
   
-  # Else, reduce non-mitochondrial gene expression to achieve the target mito percentage
-  total_count <- sum(cell_counts)
-  target_mito_sum <- total_count * target_mito_pct / 100
-  mito_sum <- sum(mito_counts)
-  reduction_factor <- (total_count - target_mito_sum) / sum(non_mito_counts)
-  
-  # Perturb the non-mitochondrial gene expression by randomly zeroing out some genes or reducing others
-  perturbed_non_mito <- non_mito_counts * reduction_factor
-  perturbed_non_mito <- ifelse(runif(length(perturbed_non_mito)) > 0.5, perturbed_non_mito, 0)
-  
-  # Recombine perturbed non-mitochondrial with unaltered mitochondrial counts
-  perturbed_cell_counts <- cell_counts
-  perturbed_cell_counts[!mito_genes] <- perturbed_non_mito
-  
-  return(perturbed_cell_counts)
+  return(count_matrix)
 }
 
 # Function to perturb an entire count matrix
-introducePerturb <- function(count_matrix, mito_genes) {
+introducePerturb <- function(seurat, 
+                             mito_genes, 
+                             percent_damage, 
+                             project_name, 
+                             output_dir = "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2") {
   
-  # Convert dgCMatrix to a normal matrix 
-  if (inherits(count_matrix, "dgCMatrix")) {
-    count_matrix <- as.matrix(count_matrix)
-  }
+  # Extract percentage of cells at random, these will be altered and then reintroduced 
+  damaged_cell_number <- round(((percent_damage / 100) * (dim(seurat)[2])), 0)
+  damaged_cell_selections <- sample(colnames(seurat), damaged_cell_number)
+  to_be_perturbed <- subset(seurat, cells = damaged_cell_selections)
+  to_be_perturbed_matrix <- to_be_perturbed@assays$RNA$counts
   
-  # Apply the helper function to each column (cell) in the matrix
-  perturbed_matrix <- apply(count_matrix, 2, introducePerturb_helper, mito_genes = mito_genes)
+  # Remove these cells from the seurat object
+  all_cells <- colnames(seurat)
+  remaining_cells <- setdiff(all_cells, damaged_cell_selections)
+  unperturbed <- subset(seurat, cells = remaining_cells)
+  unperturbed_matrix <- unperturbed@assays$RNA$counts
   
-  # Convert the perturbed matrix back to dgCMatrix (better storage)
-  perturbed_matrix <- as(perturbed_matrix, "dgCMatrix")
+  # Perturb the selected cells
+  perturbed_matrix <- apply(to_be_perturbed_matrix, 2, perturb_single_cell, mito_genes = mito_genes)
+  rownames(perturbed_matrix) <- rownames(to_be_perturbed_matrix)
   
-  return(perturbed_matrix)
+  # Reorder the rows of perturbed_matrix to match the order of unperturbed_matrix
+  perturbed_matrix <- perturbed_matrix[match(rownames(unperturbed_matrix), rownames(perturbed_matrix)), ]
+  
+  # Combine perturbed and unperturbed cells
+  combined_matrix <- cbind(unperturbed_matrix, perturbed_matrix)
+  combined_matrix <- as(combined_matrix, "dgCMatrix")
+  combined_seurat <- CreateSeuratObject(counts = combined_matrix, assay = "RNA", project = paste0(seurat@project.name, "_perturbed"))
+  
+  # Edit the Seurat object to contain meaningful information 
+  combined_seurat$orig.ident <- ifelse(colnames(combined_seurat) %in% damaged_cell_selections, "damaged", "cell")
+  
+  # Calculate standard quality control metrics ----- 
+  
+  # Isolate ribosomal genes (RPS and RPL)
+  rb_genes <- annotations %>%
+    dplyr::filter(grepl("^RPS|^RPL", gene_name)) %>%
+    pull(gene_name)
+  
+  
+  # Calculate the feature percentages and normalised expressions 
+  combined_seurat$mt.percent <- PercentageFeatureSet(
+    object   = combined_seurat,
+    features = intersect(mito_genes, rownames(combined_seurat@assays$RNA)),
+    assay    = "RNA"
+  ) 
+  
+  combined_seurat$rb.percent <- PercentageFeatureSet(
+    object   = combined_seurat,
+    features = intersect(rb_genes, rownames(combined_seurat@assays$RNA)),
+    assay    = "RNA"
+  ) 
+  
+  combined_seurat$malat1.percent <- PercentageFeatureSet(
+    object   = combined_seurat,
+    features = "MALAT1",
+    assay    = "RNA"
+  ) 
+  
+  # Calculate psuedo-nuclear fraction score for DropletQC (identical to previous in section B, testing strategies 1.1)
+  combined_seurat$nf_malat1 <- FetchData(combined_seurat, vars = "MALAT1", layer = "counts")
+  combined_seurat$nf_malat1 <- (combined_seurat$nf_malat1 - min(combined_seurat$nf_malat1)) / (max(combined_seurat$nf_malat1) - min(combined_seurat$nf_malat1))
+  
+  # Transfer cell annotations 
+  combined_seurat$celltype <- seurat$celltype[match(rownames(combined_seurat@meta.data), rownames(seurat@meta.data))]
+  combined_seurat$celltype <- ifelse(combined_seurat$orig.ident == "damaged", "damaged", combined_seurat$celltype)
+  
+  # Save outputs 
+  saveRDS(combined_seurat, file.path(output_dir, paste0(project_name, "_", percent_damage, ".rds")))
+  write.csv(combined_matrix, file.path(output_dir, paste0(project_name, "_", percent_damage, "_matrix.csv")))
+  
+  
+  # Visualise the output
+  test <- NormalizeData(combined_seurat) %>%
+    FindVariableFeatures() %>%
+    ScaleData() %>% 
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>% 
+    FindClusters() %>% 
+    RunUMAP(dims = 1:30)
+  
+  # Note that these markers applicable for immune/PBMCs
+  colours <- c("T" = "#A6BEAE",
+               "Monocyte" = "#88A1CD",
+               "DC" = "#A799C9",
+               "B" = "#BDC5EE",
+               "NK" = "#9DBD73",
+               "damaged" = "red"
+               )
+  
+  plot <- DimPlot(test, group.by = "celltype")  + 
+    NoAxes() + ggtitle(project_name) + scale_color_manual(values = colours) + 
+    theme(panel.border = element_rect(colour = "black"))
+
+  ggsave(filename = file.path(output_dir, paste0(project_name, "_perturbed.png")), 
+         plot, 
+         width = 5, 
+         height = 4, 
+         units = "in",
+         dpi = 300)
+  
+  
+  return(combined_seurat)
   
 }
 
-
 #-------------------------------------------------------------------------------
-# Retrieve datasets 
+# Generate perturbed data 
 #-------------------------------------------------------------------------------
 
-# SeuratData publicly available data ----
-available_data <- AvailableData()
-available_data <- subset(available_data, species == "human")
-
-# IFNB-Stimulated & Control PBMCs
-InstallData("ifnb")
-data("ifnb")
-ifnb <- UpdateSeuratObject(ifnb)
-
-# Isolate control and treated cases from the original data 
-control <- subset(ifnb, stim == "CTRL")    # 6548 cells 
-stimulated <- subset(ifnb, stim == "STIM") # 7451 cells 
+# 2.5 % damage added 
+introducePerturb(seurat = control_sim_1, percent_damage = 2.5, mito_genes = mito_genes, project_name = "control_sim_1_2.5")
+introducePerturb(seurat = control_sim_2, percent_damage = 2.5, mito_genes = mito_genes, project_name = "control_sim_2_2.5")
+introducePerturb(seurat = control_sim_3, percent_damage = 2.5, mito_genes = mito_genes, project_name = "control_sim_3_2.5")
+introducePerturb(seurat = stimulated_sim_1, percent_damage = 2.5, mito_genes = mito_genes, project_name = "stimulated_sim_1_2.5")
+introducePerturb(seurat = stimulated_sim_2, percent_damage = 2.5, mito_genes = mito_genes, project_name = "stimulated_sim_2_2.5")
+introducePerturb(seurat = stimulated_sim_3, percent_damage = 2.5, mito_genes = mito_genes, project_name = "stimulated_sim_3_2.5")
 
 
-# Create technical replicates by random sub-sampling the data 
-set.seed(111)
-control_a_cells <- sample(rownames(control@meta.data), 5000)
-control_a <- subset(control, cells = control_a_cells)
-stimulated_a_cells <- sample(rownames(stimulated@meta.data), 5000)
-stimulated_a <- subset(stimulated, cells = stimulated_a_cells) 
+# 5 % damage added 
+introducePerturb(seurat = control_sim_1, percent_damage = 5, mito_genes = mito_genes, project_name = "control_sim_1_5")
+introducePerturb(seurat = control_sim_2, percent_damage = 5, mito_genes = mito_genes, project_name = "control_sim_2_5")
+introducePerturb(seurat = control_sim_3, percent_damage = 5, mito_genes = mito_genes, project_name = "control_sim_3_5")
+introducePerturb(seurat = stimulated_sim_1, percent_damage = 5, mito_genes = mito_genes, project_name = "stimulated_sim_1_5")
+introducePerturb(seurat = stimulated_sim_2, percent_damage = 5, mito_genes = mito_genes, project_name = "stimulated_sim_2_5")
+introducePerturb(seurat = stimulated_sim_3, percent_damage = 5, mito_genes = mito_genes, project_name = "stimulated_sim_3_5")
 
-set.seed(112)
-control_b_cells <- sample(rownames(control@meta.data), 5000)
-control_b <- subset(control, cells = control_b_cells)
-stimulated_b_cells <- sample(rownames(stimulated@meta.data), 5000)
-stimulated_b <- subset(stimulated, cells = stimulated_b_cells) 
+# 10 % damage added 
+introducePerturb(seurat = control_sim_1, percent_damage = 10, mito_genes = mito_genes, project_name = "control_sim_1_10")
+introducePerturb(seurat = control_sim_2, percent_damage = 10, mito_genes = mito_genes, project_name = "control_sim_2_10")
+introducePerturb(seurat = control_sim_3, percent_damage = 10, mito_genes = mito_genes, project_name = "control_sim_3_10")
+introducePerturb(seurat = stimulated_sim_1, percent_damage = 10, mito_genes = mito_genes, project_name = "stimulated_sim_1_10")
+introducePerturb(seurat = stimulated_sim_2, percent_damage = 10, mito_genes = mito_genes, project_name = "stimulated_sim_2_10")
+introducePerturb(seurat = stimulated_sim_3, percent_damage = 10, mito_genes = mito_genes, project_name = "stimulated_sim_3_10")
 
-set.seed(113)
-control_c_cells <- sample(rownames(control@meta.data), 5000)
-control_c <- subset(control, cells = control_c_cells)
-stimulated_c_cells <- sample(rownames(stimulated@meta.data), 5000)
-stimulated_c <- subset(stimulated, cells = stimulated_c_cells) 
+# 15 % damage added 
+introducePerturb(seurat = control_sim_1, percent_damage = 15, mito_genes = mito_genes, project_name = "control_sim_1_15")
+introducePerturb(seurat = control_sim_2, percent_damage = 15, mito_genes = mito_genes, project_name = "control_sim_2_15")
+introducePerturb(seurat = control_sim_3, percent_damage = 15, mito_genes = mito_genes, project_name = "control_sim_3_15")
+introducePerturb(seurat = stimulated_sim_1, percent_damage = 15, mito_genes = mito_genes, project_name = "stimulated_sim_1_15")
+introducePerturb(seurat = stimulated_sim_2, percent_damage = 15, mito_genes = mito_genes, project_name = "stimulated_sim_2_15")
+introducePerturb(seurat = stimulated_sim_3, percent_damage = 15, mito_genes = mito_genes, project_name = "stimulated_sim_3_15")
+
+# 20 % damage added 
+introducePerturb(seurat = control_sim_1, percent_damage = 20, mito_genes = mito_genes, project_name = "control_sim_1_20")
+introducePerturb(seurat = control_sim_2, percent_damage = 20, mito_genes = mito_genes, project_name = "control_sim_2_20")
+introducePerturb(seurat = control_sim_3, percent_damage = 20, mito_genes = mito_genes, project_name = "control_sim_3_20")
+introducePerturb(seurat = stimulated_sim_1, percent_damage = 20, mito_genes = mito_genes, project_name = "stimulated_sim_1_20")
+introducePerturb(seurat = stimulated_sim_2, percent_damage = 20, mito_genes = mito_genes, project_name = "stimulated_sim_2_20")
+introducePerturb(seurat = stimulated_sim_3, percent_damage = 20, mito_genes = mito_genes, project_name = "stimulated_sim_3_20")
 
 
 
-set.seed(123)  
-# Example usage
-# Create a logical vector indicating which genes in the count matrix are mitochondrial
-
-mito_genes <- rownames(hPBMC_counts) %in% mt_genes
-perturbed_count_matrix <- introducePerturb_matrix(count_matrix = hPBMC_counts, mito_genes = mito_genes)
-
-test <- CreateSeuratObject(counts = perturbed_count_matrix, assay = "RNA", project = "test")
-
-# Calculate the feature percentages and normalised expressions 
-test$mt.percent <- PercentageFeatureSet(
-  object   = test,
-  features = intersect(mt_genes, rownames(test@assays$RNA)),
-  assay    = "RNA"
-) 
-
-test$original.mt.percent <- hPBMC$mt.percent
 
 
 

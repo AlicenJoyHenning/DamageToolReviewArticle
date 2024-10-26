@@ -43,14 +43,14 @@ for (pkg in packages) {
 #-------------------------------------------------------------------------------
 
 # IFNB SeuratData reference samples 
-control <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/control_reference.rds")
-stimulated <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/stimulated_reference.rds")
-control_matrix <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/control_reference_matrix.rds")
-stimulated_matrix <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/stimulated_reference_matrix.rds")
+control <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_reference.rds")
+stimulated <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_reference.rds")
+control_matrix <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_reference_matrix.rds")
+stimulated_matrix <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_reference_matrix.rds")
 
 # Read in models (1.1.1 - Fit scDesign2 models.R)
-control_model <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/control_model.rds")
-stimulated_model <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/stimulated_model.rds")
+control_model <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_model.rds")
+stimulated_model <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_model.rds")
 
 
 # Human gene annotations 
@@ -79,7 +79,6 @@ cell_type_selection <- c("Monocyte", "DC", "T", "B", "NK")   # coarse PBMC annot
 # Proportion which these celltype exist 
 cell_type_proportion_control <- table(colnames(control_matrix))[cell_type_selection]
 cell_type_proportion_stimulated <- table(colnames(stimulated_matrix))[cell_type_selection]
-
 
 
 # Simulate datasets using scDesign2----
@@ -202,7 +201,19 @@ generate_simulations <- function(model_params,    # model fit created using scDe
       RunUMAP(dims = 1:30)
     
     # Note that these markers applicable for immune/PBMCs
-    clusters <- DimPlot(test, group.by = "celltype")  + ggtitle(project_name) + theme(panel.border = element_rect(colour = "black"))
+    colours <- c("T" = "#A6BEAE",
+                 "Monocyte" = "#88A1CD",
+                 "DC" = "#A799C9",
+                 "B" = "#BDC5EE",
+                 "NK" = "#9DBD73",
+                 "damaged" = "red"
+    )
+    
+    clusters <- DimPlot(test, group.by = "celltype")  + 
+      NoAxes() + ggtitle(project_name) + scale_color_manual(values = colours) + 
+      theme(panel.border = element_rect(colour = "black"))
+    
+    # MArkers 
     T_cells <- FeaturePlot(test, "CD3E") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
     B_cells <- FeaturePlot(test, "MS4A1") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
     NK_cells <- FeaturePlot(test, "NKG7") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
