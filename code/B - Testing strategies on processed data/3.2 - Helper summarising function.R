@@ -11,7 +11,7 @@
 # Helper function for benchmarking 
 
 summarise_results <- function(seurat, 
-                              methods = list("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
+                              methods = list("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops", 
                                           "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
                               ){
   

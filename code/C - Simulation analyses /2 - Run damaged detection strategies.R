@@ -41,8 +41,60 @@ for (pkg in packages) {
   }
 }
 
-# Load processed datasets ----
+# Read in 30 simulated datasets using loop ----
 
+# Parent directories (save output in list)
+parent_directory <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/"
+conditions <- c("control_sim", "stimulated_sim")
+percentages <- c("2.5", "5", "10", "15", "20")
+reps <- 1:3
+
+# Initialize an empty list to store the Seurat objects generated previously 
+data_list <- list()
+
+# Loop through conditions, percentages, and replicates
+for (condition in conditions) {
+  for (percentage in percentages) {
+    for (rep in reps) {
+      # Construct the file name
+      file_name <- paste0(condition, "_", rep, "_", percentage, ".rds")
+      file_path <- file.path(parent_directory, file_name)
+      
+      # Check if the file exists before reading
+      if (file.exists(file_path)) {
+        
+        # Read the seurat object 
+        data <- readRDS(file_path)
+        
+        # Store the data in the list with a meaningful name
+        data_list[[paste0(condition, "_", rep, "_", percentage)]] <- data
+      }
+    }
+  }
+}
+
+
+#-------------------------------------------------------------------------------
+# RUN FUNCTION
+#-------------------------------------------------------------------------------
+
+# Tool testing on each dataset ----
+# (Isolated to allow for adjustments if necessary)
+
+# Parent directories 
+ddqc_path <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/python_tool_output/simulated_ddqc_output/"
+ensemble_path <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/python_tool_output/EnsembleKQC_simulated_output/"
+output_path <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/benchmark_results/"
+
+# Positive controls 
+benchmark(seurat = data_list, 
+          project_name = "control_sim",
+          model_method = "linear",
+          ddqc_path = paste0(ddqc_path, ".csv"), 
+          ensembleKQC_path = paste0(ensemble_path, ".csv"),
+          output_path = paste0(output_path, ".csv"))
+
+          
 # 2.5 % damaged 
 control_sim_1_2.5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_1_2.5.rds")
 control_sim_2_2.5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_2.5.rds")
@@ -82,17 +134,5 @@ control_sim_2_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturba
 stimulated_sim_1_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_1_20.rds")
 stimulated_sim_2_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_2_20.rds")
 stimulated_sim_3_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_3_20.rds")
-
-
-
-#-------------------------------------------------------------------------------
-# TEST THE TOOLS 
-#-------------------------------------------------------------------------------
-
-
-# Use predefined functions to run the testing ----
-
-
-
 
 

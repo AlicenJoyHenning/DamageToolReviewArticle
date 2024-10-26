@@ -30,8 +30,8 @@
 
 packages <- c("cowplot", "devtools", "dplyr", "ggplot2", "glmGamPoi", "Matrix", "robustbase",
               "png", "Seurat", "tidyr", 
-              "limiric", "miQC", "SingleCellExperiment",
-              "scuttle", "presto", "valiDrops", "DropletQC")
+              "limiric", "miQC", "SingleCellExperiment", "scater",
+              "scuttle", "SummarizedExperiment", "presto", "valiDrops", "DropletQC")
 
 for (pkg in packages) {
   if (!require(pkg, character.only = TRUE)) {
@@ -161,6 +161,10 @@ benchmark <- function(
     cell_type = cell_type
   )
   
+  if (project_name == "PDX_dead"){
+    dcDf$cell_type <- 1
+  }
+  
   # Run damaged detection & ignore empty droplets 
   dcresultsDf <- identify_damaged_cells(nf_umi_ed_ct = dcDf)
   seurat$DropletQC <- dcresultsDf$df$cell_status[match(rownames(dcresultsDf$df), rownames(seurat@meta.data))]
@@ -229,13 +233,31 @@ benchmark <- function(
   miQC <- colnames(sce_subset) 
   seurat$miQC <- ifelse(rownames(seurat@meta.data) %in% miQC, "cell", "damaged")
   
-  
   message("\nTool 4: miQC ...    ", best_model_type) 
   
   
-  # Tool 5: valiDrops -------
+  # Tool 5: scater -------
   
-  message("Tool 5: valiDrops ...")
+  message("Tool 5: scater ...")
+  
+  # Like miQC, scater requires single cell experiment object (sce) input 
+  sce <- as.SingleCellExperiment(seurat)
+  sce <- addPerCellQCMetrics(sce)
+
+  # Automated outlier labeling for low quality cells 
+  scater <- runColDataPCA(sce,
+                          ncomponents = 2, 
+                          variables = c("nCount_RNA", "nFeature_RNA", "mt.percent", "rb.percent"), 
+                          outliers = TRUE)
+  
+  # Transfer to Seurat 
+  seurat$scater <- scater$outlier
+  seurat$scater <- ifelse(seurat$scater == "TRUE", "damaged", "cell")
+  
+  
+  # Tool 6: valiDrops -------
+  
+  message("Tool 6: valiDrops ...")
   
   # Extract matrix from Seurat object
   expression_matrix <- GetAssayData(seurat, layer = "counts")
@@ -298,6 +320,8 @@ benchmark <- function(
   }
     
   # Manual 1: All multivariate outliers (robustbase): UMI and feature counts & mitochondrial, ribosomal and MALAT1 percentages -------
+  
+  message("Manual methods ...")
   
   # Define input df, run outlier detection, and add to Seurat meta data 
   manual1_df <- seurat_df[, c("nCount_RNA", "nFeature_RNA", "mt.percent", "rb.percent", "malat1.percent")]
@@ -375,9 +399,9 @@ benchmark <- function(
                     output_file = paste0(output_path, "/", project_name, ".png"), 
                     organism)
   
+  message("Complete!", "\n")
   
   # Global environment output 
-  
   return(seurat)
   
 }

@@ -35,7 +35,7 @@ mouse_annotations <- genes(Mmus_edb, return.type = "data.frame")
 BenchPlot <- function(seurat, 
                       output_file, 
                       organism = "Hsap", 
-                      methods = c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
+                      methods = c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops", 
                                   "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
                       
                       ) {
@@ -192,3 +192,4 @@ BenchPlot <- function(seurat,
   return(combined_plot)
   
 }
+
