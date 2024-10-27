@@ -73,15 +73,6 @@ for (condition in conditions) {
   }
 }
 
-# Reading in references (stored separately)
-control_sim_1 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_sim_1_seurat.rds")
-control_sim_2 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_sim_2_seurat.rds")
-control_sim_3 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_sim_3_seurat.rds")
-stimulated_sim_1 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_1_seurat.rds")
-stimulated_sim_2 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_2_seurat.rds")
-stimulated_sim_3 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_3_seurat.rds")
-
-
 #-------------------------------------------------------------------------------
 # RUN FUNCTION
 #-------------------------------------------------------------------------------
@@ -90,68 +81,199 @@ stimulated_sim_3 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturba
 # (Isolated to allow for adjustments if necessary)
 
 # Parent directories 
-ddqc_path <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/python_tool_output/simulated_ddqc_output/"
+ddqc_path <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/python_tool_output/ddqc_output/"
 ensemble_path <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/python_tool_output/EnsembleKQC_simulated_output/"
 output_path <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/benchmark_results/"
 
-# Positive controls 
 
-# Recalculate the mitochondrial percentages 
-control_sim_1$mt.percent <- PercentageFeatureSet(
-  object   = control_sim_1,
-  features = intersect(mito_genes, rownames(control_sim_1@assays$RNA)),
-  assay    = "RNA"
-) 
-
-
-benchmark(seurat = control_sim_1, 
-          project_name = "control_sim_1",
-          # model_method = "linear",
-          ddqc_path = paste0(ddqc_path, "control_sim_1.csv"), 
-          ensembleKQC_path = paste0(ensemble_path, "control_sim_1.csv"),
-          output_path = paste0(output_path, "control_sim_1.csv"))
-
-
-seurat <- data_list$control_sim_2_2.5
-          
 # 2.5 % damaged 
-control_sim_1_2.5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_1_2.5.rds")
-control_sim_2_2.5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_2.5.rds")
-control_sim_2_2.5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_2.5.rds")
-stimulated_sim_1_2.5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_1_2.5.rds")
-stimulated_sim_2_2.5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_2_2.5.rds")
-stimulated_sim_3_2.5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_3_2.5.rds")
+benchmark(seurat = data_list$control_sim_1_2.5, 
+          project_name = "control_sim_1_2.5",
+          ddqc_path = paste0(ddqc_path, "control_sim_1_2.5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_1_2.5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_2_2.5, 
+          project_name = "control_sim_2_2.5",
+          ddqc_path = paste0(ddqc_path, "control_sim_2_2.5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_2_2.5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_3_2.5, 
+          project_name = "control_sim_3_2.5",
+          ddqc_path = paste0(ddqc_path, "control_sim_3_2.5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_3_2.5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_1_2.5, 
+          project_name = "stimulated_sim_1_2.5",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_1_2.5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_1_2.5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_2_2.5, 
+          project_name = "stimulated_sim_2_2.5",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_2_2.5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_2_2.5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_3_2.5, 
+          project_name = "stimulated_sim_3_2.5",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_3_2.5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_3_2.5_input.csv"),
+          output_path = output_path)
+
+
 
 # 5 % damaged 
-control_sim_1_5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_1_5.rds")
-control_sim_2_5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_5.rds")
-control_sim_2_5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_5.rds")
-stimulated_sim_1_5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_1_5.rds")
-stimulated_sim_2_5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_2_5.rds")
-stimulated_sim_3_5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_3_5.rds")
+benchmark(seurat = data_list$control_sim_1_5, 
+          project_name = "control_sim_1_5",
+          ddqc_path = paste0(ddqc_path, "control_sim_1_5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_1_5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_2_5, 
+          project_name = "control_sim_2_5",
+          ddqc_path = paste0(ddqc_path, "control_sim_2_5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_2_5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_3_5, 
+          project_name = "control_sim_3_5",
+          ddqc_path = paste0(ddqc_path, "control_sim_3_5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_3_5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_1_5, 
+          project_name = "stimulated_sim_1_5",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_1_5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_1_5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_2_5, 
+          project_name = "stimulated_sim_2_5",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_2_5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_2_5_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_3_5, 
+          project_name = "stimulated_sim_3_5",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_3_5.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_3_5_input.csv"),
+          output_path = output_path)
+
 
 # 10 % damaged 
-control_sim_1_10 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_1_10.rds")
-control_sim_2_10 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_10.rds")
-control_sim_2_10 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_10.rds")
-stimulated_sim_1_10 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_1_10.rds")
-stimulated_sim_2_10 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_2_10.rds")
-stimulated_sim_3_10 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_3_10.rds")
+benchmark(seurat = data_list$control_sim_1_10, 
+          project_name = "control_sim_1_10",
+          ddqc_path = paste0(ddqc_path, "control_sim_1_10.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_1_10_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_2_10, 
+          project_name = "control_sim_2_10",
+          ddqc_path = paste0(ddqc_path, "control_sim_2_10.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_2_10_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_3_10, 
+          project_name = "control_sim_3_10",
+          ddqc_path = paste0(ddqc_path, "control_sim_3_10.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_3_10_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_1_10, 
+          project_name = "stimulated_sim_1_10",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_1_10.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_1_10_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_2_10, 
+          project_name = "stimulated_sim_2_10",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_2_10.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_2_10_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_3_10, 
+          project_name = "stimulated_sim_3_10",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_3_10.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_3_10_input.csv"),
+          output_path = output_path)
 
 # 15 % damaged 
-control_sim_1_15 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_1_15.rds")
-control_sim_2_15 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_15.rds")
-control_sim_2_15 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_15.rds")
-stimulated_sim_1_15 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_1_15.rds")
-stimulated_sim_2_15 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_2_15.rds")
-stimulated_sim_3_15 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_3_15.rds")
+benchmark(seurat = data_list$control_sim_1_15, 
+          project_name = "control_sim_1_15",
+          ddqc_path = paste0(ddqc_path, "control_sim_1_15.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_1_15_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_2_15, 
+          project_name = "control_sim_2_15",
+          ddqc_path = paste0(ddqc_path, "control_sim_2_15.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_2_15_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_3_15, 
+          project_name = "control_sim_3_15",
+          ddqc_path = paste0(ddqc_path, "control_sim_3_15.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_3_15_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_1_15, 
+          project_name = "stimulated_sim_1_15",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_1_15.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_1_15_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_2_15, 
+          project_name = "stimulated_sim_2_15",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_2_15.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_2_15_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_3_15, 
+          project_name = "stimulated_sim_3_15",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_3_15.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_3_15_input.csv"),
+          output_path = output_path)
+
 
 # 20 % damaged 
-control_sim_1_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_1_20.rds")
-control_sim_2_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_20.rds")
-control_sim_2_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_2_20.rds")
-stimulated_sim_1_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_1_20.rds")
-stimulated_sim_2_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_2_20.rds")
-stimulated_sim_3_20 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/stimulated_sim_3_20.rds")
+benchmark(seurat = data_list$control_sim_1_20, 
+          project_name = "control_sim_1_20",
+          ddqc_path = paste0(ddqc_path, "control_sim_1_20.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_1_20_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_2_20, 
+          project_name = "control_sim_2_20",
+          ddqc_path = paste0(ddqc_path, "control_sim_2_20.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_2_20_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$control_sim_3_20, 
+          project_name = "control_sim_3_20",
+          ddqc_path = paste0(ddqc_path, "control_sim_3_20.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_3_20_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_1_20, 
+          project_name = "stimulated_sim_1_20",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_1_20.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_1_20_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_2_20, 
+          project_name = "stimulated_sim_2_20",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_2_20.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_2_20_input.csv"),
+          output_path = output_path)
+
+benchmark(seurat = data_list$stimulated_sim_3_20, 
+          project_name = "stimulated_sim_3_20",
+          ddqc_path = paste0(ddqc_path, "stimulated_sim_3_20.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "stimulated_sim_3_20_input.csv"),
+          output_path = output_path)
 
 
+### End 

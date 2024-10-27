@@ -90,6 +90,7 @@ benchmark <- function(
     model_method = NULL, # Adjustable, alternative to specify the model type "linear", "spline", "polynomial", or "one_dimensional"
     ddqc_path,           # path to output ddqc labels 
     ensembleKQC_path,    # path to output ensembleKQC labels 
+    view_plot = FALSE,   # whether to display miQC plot (feature vs mito percent)
     output_path          # where all outputs are saved 
     
 ){
@@ -138,6 +139,7 @@ benchmark <- function(
   }
   
   # Use droplet_qc function to identify empty droplets
+  edDf$umi <- as.integer(edDf$umi)
   edresultsDf <- identify_empty_drops(edDf)
   
   # Identify damaged cells
@@ -156,7 +158,7 @@ benchmark <- function(
   # Create input data frame 
   dcDf <- data.frame(
     nf = nf_col,
-    umi = seurat$nCount_RNA,
+    umi = as.integer(seurat$nCount_RNA),
     cell_status = edresultsDf$cell_status,
     cell_type = cell_type
   )
@@ -180,68 +182,88 @@ benchmark <- function(
   colData(sce)$subsets_mito_percent <- seurat$mt.percent
   mainExpName(sce) <- 'gene'
   colData(sce)$detected <- seurat$nFeature_RNA
-  
-  
+
   # Function to run miQC & generate stats (single cell experiment object)
-  evaluate_model <- function(sce, model_type){
-    
-    # Run the miQC function 
-    model <- mixtureModel(sce, model_type)
-    plotMetrics(sce)
-    plotModel(sce)
-    
-    # Calculate AIC and BIC for the fitted model
-    aic_value <- AIC(model)
-    bic_value <- BIC(model)
-    
-    return(list(model = model, 
-                AIC = aic_value, 
-                BIC = bic_value))
-    
+  evaluate_model <- function(sce, model_type) {
+    tryCatch({
+      # Run the miQC function 
+      model <- mixtureModel(sce, model_type)
+      plotMetrics(sce)
+      plotModel(sce)
+      
+      # Calculate AIC and BIC for the fitted model
+      aic_value <- AIC(model)
+      bic_value <- BIC(model)
+      
+      return(list(model = model, 
+                  AIC = aic_value, 
+                  BIC = bic_value))
+    }, error = function(e) {
+      message("Error in evaluate_model with model_type = ", model_type, ": ", e$message)
+      stop("Evaluation failed, setting all cells to 'cell'")  # Stop the workflow and handle the error in the main code
+    })
   }
   
   # Generate the different models 
   model_types <- c("linear", "spline", "polynomial", "one_dimensional")
-  
-  # Loop through each model 
   results <- list()
   
+  # Try evaluating each model type
   for (model_type in model_types) {
+    result <- tryCatch({
+      evaluate_model(sce, model_type = model_type)
+    }, error = function(e) {
+      # If an error occurs, set miQC to "cell" and exit immediately
+      seurat$miQC <- "cell"
+      message("All cells set to 'cell' due to error in model evaluation.")
+      return(NULL)  # Exit the loop early
+    })
     
-    result <- evaluate_model(sce, model_type = model_type)
-    plotMetrics(sce)
-    results[[model_type]] <- result
-    
+    # If no error, store result
+    if (!is.null(result)) {
+      results[[model_type]] <- result
+    } else {
+      break  # Stop processing further if an error occurred
+    }
   }
   
+  # Continue with the workflow only if results were obtained
+  if (length(results) > 0) {
+    # Extract AIC and BIC values for all successfully fitted models
+    aic_values <- sapply(results, function(x) x$AIC)
+    bic_values <- sapply(results, function(x) x$BIC)
+    
+    # Rank the models based on AIC and BIC (lowest is better)
+    aic_ranks <- rank(aic_values)
+    bic_ranks <- rank(bic_values)
+    combined_ranks <- aic_ranks + bic_ranks
+    
+    # Select the best fit model (model with lowest combined rank)
+    minimum_score <- min(combined_ranks) # For terminal output only 
+    best_model_type <- names(which.min(combined_ranks))
+    
+    if (!is.null(model_method)) { best_model_type <- model_method }
+    
+    # Subset based on the selected model
+    sce_subset <- filterCells(sce, results[[best_model_type]]$model) 
+    miQC <- colnames(sce_subset) 
+    seurat$miQC <- ifelse(rownames(seurat@meta.data) %in% miQC, "cell", "damaged")
+    
+    # Optional: plot metrics if required
+    if (view_plot) { print(plotMetrics(sce)) }
+    
+    message("\nTool 4: miQC ...    ", best_model_type)
+    
+  } else {
+    
+    # In case all models failed miQC was set to "cell" earlier
+    message("All miQC models failed.")
+  }
   
-  # Extract AIC and BIC values for all models
-  aic_values <- sapply(results, function(x) x$AIC)
-  bic_values <- sapply(results, function(x) x$BIC)
-  
-  # Rank the models based on AIC and BIC (lowest is better)
-  aic_ranks <- rank(aic_values)
-  bic_ranks <- rank(bic_values)
-  combined_ranks <- aic_ranks + bic_ranks
-  
-  # Select the best fit model (model with lowest combined rank)
-  minimum_score <- min(combined_ranks) # For terminal output only 
-  best_model_type <- names(which.min(combined_ranks))
-  plotModel(sce)
-
-  if (!is.null(model_method)) {best_model_type <- model_method}
-  # best_model_type <- "linear"
-  
-  # Subset based on model 
-  sce_subset <- filterCells(sce, results[[best_model_type]]$model) 
-  
-  
-  # Report results in Seurat object 
-  miQC <- colnames(sce_subset) 
-  seurat$miQC <- ifelse(rownames(seurat@meta.data) %in% miQC, "cell", "damaged")
-  
-  message("\nTool 4: miQC ...    ", best_model_type) 
-  
+  # Making sure 
+  if (!"miQC" %in% colnames(seurat@meta.data)) {
+    seurat$miQC <- "cell"
+  }
   
   # Tool 5: scater -------
   
@@ -268,7 +290,7 @@ benchmark <- function(
   
   # Extract matrix from Seurat object
   expression_matrix <- GetAssayData(seurat, layer = "counts")
-  
+
   if (organism == "Hsap") {species <- "human"}
   if (organism == "Mmus") {species <- "mouse"}
   
