@@ -49,7 +49,7 @@ conditions <- c("control_sim", "stimulated_sim")
 percentages <- c("2.5", "5", "10", "15", "20")
 reps <- 1:3
 
-# Initialize an empty list to store the Seurat objects generated previously 
+# Store the Seurat objects in a list 
 data_list <- list()
 
 # Loop through conditions, percentages, and replicates
@@ -73,6 +73,14 @@ for (condition in conditions) {
   }
 }
 
+# Reading in references (stored separately)
+control_sim_1 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_sim_1_seurat.rds")
+control_sim_2 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_sim_2_seurat.rds")
+control_sim_3 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_sim_3_seurat.rds")
+stimulated_sim_1 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_1_seurat.rds")
+stimulated_sim_2 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_2_seurat.rds")
+stimulated_sim_3 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_sim_3_seurat.rds")
+
 
 #-------------------------------------------------------------------------------
 # RUN FUNCTION
@@ -87,13 +95,24 @@ ensemble_path <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesi
 output_path <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/benchmark_results/"
 
 # Positive controls 
-benchmark(seurat = data_list, 
-          project_name = "control_sim",
-          model_method = "linear",
-          ddqc_path = paste0(ddqc_path, ".csv"), 
-          ensembleKQC_path = paste0(ensemble_path, ".csv"),
-          output_path = paste0(output_path, ".csv"))
 
+# Recalculate the mitochondrial percentages 
+control_sim_1$mt.percent <- PercentageFeatureSet(
+  object   = control_sim_1,
+  features = intersect(mito_genes, rownames(control_sim_1@assays$RNA)),
+  assay    = "RNA"
+) 
+
+
+benchmark(seurat = control_sim_1, 
+          project_name = "control_sim_1",
+          # model_method = "linear",
+          ddqc_path = paste0(ddqc_path, "control_sim_1.csv"), 
+          ensembleKQC_path = paste0(ensemble_path, "control_sim_1.csv"),
+          output_path = paste0(output_path, "control_sim_1.csv"))
+
+
+seurat <- data_list$control_sim_2_2.5
           
 # 2.5 % damaged 
 control_sim_1_2.5 <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/control_sim_1_2.5.rds")

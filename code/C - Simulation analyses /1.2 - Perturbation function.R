@@ -79,10 +79,7 @@ mito_genes <- append(c("MALAT1", "NEAT1", "XIST", "TSIX", "TUG1", "MEG3", "RN7SL
 # 2. Remove the expression of a random subset cytoplasmic genes (make expression 0), mimicking complete loss of RNA transcripts (decreases feature count)
 
 
-#seurat <- control_sim_1
-
-# Function to perturb a single cell's gene expression profile
-perturb_single_cell <- function(count_matrix, mito_genes) {
+perturb_single_cell <- function(count_matrix, mito_genes, zero_out_constant = 0.0) {
   
   # Convert count matrix to matrix for manipulation
   count_matrix <- as.matrix(count_matrix)
@@ -97,36 +94,44 @@ perturb_single_cell <- function(count_matrix, mito_genes) {
   total_counts <- colSums(count_matrix)
   
   # Randomly assign target mitochondrial percentages for each cell
-  target_mito_pct <- runif(ncol(count_matrix), min = 20, max = 100)
+  target_mito_pct <- runif(ncol(count_matrix), min = 20, max = 98)
   
-  # Calculate the target mitochondrial counts for each cell
-  target_mito_counts <- total_counts * (target_mito_pct / 100)
-  
-  # Initial random reduction factors with added variability for each cell
-  reduction_factors <- (total_counts - target_mito_counts) / non_mito_counts
-  reduction_factors <- reduction_factors * runif(ncol(count_matrix), min = 0.9, max = 1.1)
-  
-  # Apply each cell's reduction factor and adjust further if below target
   for (i in seq_len(ncol(count_matrix))) {
-    # Initial reduction for non-mitochondrial genes
-    count_matrix[non_mito_idx, i] <- count_matrix[non_mito_idx, i] * reduction_factors[i]
+    # Step 1: Calculate target non-mitochondrial gene count to zero
+    current_non_mito_genes <- sum(count_matrix[non_mito_idx, i] > 0)
     
-    # Recalculate mitochondrial percentage after reduction
-    mito_sum <- sum(count_matrix[mito_idx, i])
-    non_mito_sum <- sum(count_matrix[non_mito_idx, i])
-    final_mito_pct <- mito_sum / (mito_sum + non_mito_sum) * 100
+    # Define a scaling curve to control zero-out proportion
+    max_zero_out_proportion <- 0.32  # testing to see if higher helps smooth it out # 32
+    zero_out_proportion <- max_zero_out_proportion * (1 - exp(-0.02 * target_mito_pct[i]))  # Subtle scaling with cap
     
-    # Adjust further if mitochondrial percentage is below the target
-    while (final_mito_pct < target_mito_pct[i]) {
-      # Incrementally decrease non-mitochondrial counts
-      count_matrix[non_mito_idx, i] <- count_matrix[non_mito_idx, i] * 0.98
-      non_mito_sum <- sum(count_matrix[non_mito_idx, i])
-      final_mito_pct <- mito_sum / (mito_sum + non_mito_sum) * 100
+    # Add a small constant if specified
+    zero_out_proportion <- min(zero_out_proportion + zero_out_constant, max_zero_out_proportion)
+    
+    # Calculate the number of genes to zero out, ensuring it doesn't exceed available genes
+    genes_to_zero <- min(floor(current_non_mito_genes * zero_out_proportion), current_non_mito_genes)
+    
+    # Randomly zero out the calculated number of non-mito genes
+    if (genes_to_zero > 0) {
+      non_mito_gene_indices <- which(non_mito_idx & count_matrix[, i] > 0)
+      genes_to_zero_indices <- sample(non_mito_gene_indices, size = genes_to_zero)
+      count_matrix[genes_to_zero_indices, i] <- 0
     }
     
-    # Optional: display the current cell iteration and final mito percentage
-    cat("Processed cell", i, "- Target mito%", round(target_mito_pct[i], 2), 
-        "- Final mito%", round(final_mito_pct, 2), "\n")
+    # Step 2: Calculate new mito and non-mito counts after zeroing
+    mito_sum <- sum(count_matrix[mito_idx, i])
+    non_mito_sum <- sum(count_matrix[non_mito_idx, i])
+    total_counts[i] <- mito_sum + non_mito_sum  # Update total counts
+    
+    # Step 3: Apply scaling to remaining non-mito genes to reach target mito percentage
+    target_mito_counts <- total_counts[i] * (target_mito_pct[i] / 100)
+    reduction_factor <- (total_counts[i] - target_mito_counts) / max(non_mito_sum, 1)  # No restriction on reduction factor
+    
+    # Apply the calculated reduction factor directly
+    count_matrix[non_mito_idx, i] <- count_matrix[non_mito_idx, i] * reduction_factor
+    
+    # Optional: display iteration details
+    cat("Processed cell", i, "- Target mito %", round(target_mito_pct[i], 2), 
+        "- Remaining non-mito genes:", sum(count_matrix[non_mito_idx, i] > 0), "\n")
   }
   
   return(count_matrix)
@@ -239,6 +244,7 @@ introducePerturb <- function(seurat,
   return(combined_seurat)
   
 }
+
 
 #-------------------------------------------------------------------------------
 # Generate perturbed data 

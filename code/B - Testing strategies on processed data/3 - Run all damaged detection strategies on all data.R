@@ -161,7 +161,7 @@ benchmark <- function(
     cell_type = cell_type
   )
   
-  if (project_name == "PDX_dead"){
+  if (project_name %in% c("PDX_dead")){
     dcDf$cell_type <- 1
   }
   
@@ -181,11 +181,14 @@ benchmark <- function(
   mainExpName(sce) <- 'gene'
   colData(sce)$detected <- seurat$nFeature_RNA
   
+  
   # Function to run miQC & generate stats (single cell experiment object)
   evaluate_model <- function(sce, model_type){
     
     # Run the miQC function 
     model <- mixtureModel(sce, model_type)
+    plotMetrics(sce)
+    plotModel(sce)
     
     # Calculate AIC and BIC for the fitted model
     aic_value <- AIC(model)
@@ -202,13 +205,15 @@ benchmark <- function(
   
   # Loop through each model 
   results <- list()
+  
   for (model_type in model_types) {
     
     result <- evaluate_model(sce, model_type = model_type)
-    
+    plotMetrics(sce)
     results[[model_type]] <- result
     
   }
+  
   
   # Extract AIC and BIC values for all models
   aic_values <- sapply(results, function(x) x$AIC)
@@ -222,12 +227,14 @@ benchmark <- function(
   # Select the best fit model (model with lowest combined rank)
   minimum_score <- min(combined_ranks) # For terminal output only 
   best_model_type <- names(which.min(combined_ranks))
+  plotModel(sce)
 
   if (!is.null(model_method)) {best_model_type <- model_method}
   # best_model_type <- "linear"
   
-  # Susbet based on model 
+  # Subset based on model 
   sce_subset <- filterCells(sce, results[[best_model_type]]$model) 
+  
   
   # Report results in Seurat object 
   miQC <- colnames(sce_subset) 
