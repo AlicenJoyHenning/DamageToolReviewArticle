@@ -284,43 +284,58 @@ write.csv(combined_medians, "/home/alicen/Projects/ReviewArticle/damage_perturba
 # Psuedo-bulk DEGs between cell type in control and stimulated case (5 cell types)
 # Compute the F1 score for each set of cell-type specific DEGs 
 
-# Calculate parent DEGs all together 
-# Edit merge all together, column with dataset, add this to psuedobulking to get 3 rreplicates for each 
-sim_1 <-  merge(control_sim_1, y = stimulated_sim_1, add.cell.ids = c("control", "stimulated"), project = "sim_1")
-sim_2 <-  merge(control_sim_2, y = stimulated_sim_2, add.cell.ids = c("control", "stimulated"), project = "sim_2")
-sim_3 <-  merge(control_sim_3, y = stimulated_sim_1, add.cell.ids = c("control", "stimulated"), project = "sim_3")
+# Calculate parent DEGs ----
+# Edit merge all together, column with dataset, add this to psuedobulking to get 3 replicates for each 
+parents_merged <-  merge(control_sim_1, 
+                         y = list(stimulated_sim_1, 
+                                  control_sim_2,  stimulated_sim_2, 
+                                  control_sim_3,  stimulated_sim_3), 
+                        add.cell.ids = c("control_1", "stimulated_1", 
+                                         "control_2", "stimulated_2",
+                                         "control_3", "stimulated_3"), 
+                        project = "sim")
 
 # Pseudobulk counts (average expression of cell types, not cells, are used)
-
-sim_1_psuedo <- AggregateExpression(sim_1, assays = "RNA", return.seurat = T, group.by = c("orig.ident", "celltype"))
-sim_2_psuedo <- AggregateExpression(sim_2, assays = "RNA", return.seurat = T, group.by = c("orig.ident", "celltype"))
-sim_3_psuedo <- AggregateExpression(sim_3, assays = "RNA", return.seurat = T, group.by = c("orig.ident", "celltype"))
+parents_merged$stim <- gsub("_[0-9]+", "", parents_merged$orig.ident)
+parents_psuedo <- AggregateExpression(parents_merged, assays = "RNA", return.seurat = T, group.by = c("orig.ident", "celltype", "stim"))
 
 # Add meta data column with celltype & stimulated status & set this to the Idents
-sim_1_psuedo$orig.ident <- gsub("-[0-9]+_", "_", sim_1_psuedo$orig.ident)
-sim_2_psuedo$orig.ident <- gsub("-[0-9]+_", "_", sim_2_psuedo$orig.ident)
-sim_3_psuedo$orig.ident <- gsub("-[0-9]+_", "_", sim_3_psuedo$orig.ident)
-
-Idents(sim_1_psuedo) <- "orig.ident"
-Idents(sim_2_psuedo) <- "orig.ident"
-Idents(sim_3_psuedo) <- "orig.ident"
+parents_psuedo$celltype.stim <- paste0(parents_psuedo$celltype, "_", parents_psuedo$stim)
+Idents(parents_psuedo) <- "celltype.stim"
 
 # DEG 
-bulk.mono.de <- FindMarkers(object = sim_1_psuedo, 
-                            ident.1 = "control_T", 
-                            ident.2 = "stimulated_T",
-                            test.use = "DESeq2")
+sets <- list(
+  list(name = "B", ident_1 = "B_control", ident_2 = "B_stimulated"), 
+  list(name = "DC", ident_1 = "DC_control", ident_2 = "DC_stimulated"), 
+  list(name = "Monocyte", ident_1 = "Monocyte_control", ident_2 = "Monocyte_stimulated"), 
+  list(name = "NK", ident_1 = "NK_control", ident_2 = "NK_stimulated"), 
+  list(name = "T", ident_1 = "T_control", ident_2 = "T_stimulated"))
+  
 
+parent_DEGs <- list()
 
-table(sim_1$celltype)
+for (set in sets){
+  
+  # Run DESeq2 
+  bulk.deg <- FindMarkers(object = parents_psuedo, 
+                          ident.1 = set$ident_1, 
+                          ident.2 = set$ident_2,
+                          test.use = "DESeq2")
+  
+  # Keep only significantly differentially expressed genes 
+  bulk.deg <- subset(bulk.deg, (p_val_adj <= 0.05) & (p_val_adj != 0))
+  bulk.deg <- rownames(bulk.deg)
 
-# Calculate and store variable features (vf) for each parent dataset
-variable_features <- list()
-for (name in names(seurat_objects)) {
-  seurat_objects[[name]] <- NormalizeData(seurat_objects[[name]]) %>% FindVariableFeatures(nfeatures = 100)
-  variable_features[[name]] <- VariableFeatures(seurat_objects[[name]])
+  parent_DEGs[[set$name]] <- bulk.deg
+  
 }
 
-cell_types <- c("Monocyte", "DC", "T", "B", "NK")
+
+# Calculate test DEGs and compare to parent ----
+
+
+
+
+
 
 
