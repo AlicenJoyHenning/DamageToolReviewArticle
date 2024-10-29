@@ -242,10 +242,131 @@ seurat_objects <- list(
 # Calculate and store variable features (vf) for each parent dataset
 variable_features <- list()
 
+# Change back to 5000 genes 
 for (name in names(seurat_objects)) {
-  seurat_objects[[name]] <- NormalizeData(seurat_objects[[name]]) %>% FindVariableFeatures(nfeatures = 100)
+  seurat_objects[[name]] <- NormalizeData(seurat_objects[[name]]) %>% FindVariableFeatures(nfeatures = 5000)
   variable_features[[name]] <- VariableFeatures(seurat_objects[[name]])
 }
+
+# Compare control (parent) to damaged (unfiltered) -----
+
+# Create list of test (unfiltered) objects 
+
+# Define the control and stimulated simulations
+simulations <- c("control_sim_1", "control_sim_2", "control_sim_3", 
+                 "stimulated_sim_1", "stimulated_sim_2", "stimulated_sim_3")
+
+# Define the damage percentages
+damage_percentages <- c("2.5", "5", "10", "15", "20")
+
+# Initialize an empty list to store the test cases
+test_list <- list()
+
+# Nested loops to generate the test cases
+for (sim in simulations) {
+  for (damage_percent in damage_percentages) {
+    project_name <- paste0(sim, "_", damage_percent)
+    test_list[[project_name]] <- list(
+      test = simulated[[paste0(sim, "_", damage_percent, "_seurat")]],
+      damaged_percent = damage_percent,
+      project_name = project_name
+    )
+  }
+}
+
+# Convert the list to a format that matches the original structure
+test_list <- unname(test_list)
+  
+
+compare_sets <- function(test,             # seurat of the damaged case of interest 
+                         damaged_percent,  # 2.5, 5, 10, 15, or 20
+                         project_name      # string to save this column as 
+){
+  # Initialize empty df
+  results <- data.frame(case = character(),
+                        jaccard_index = numeric(),
+                        intersection = numeric(), 
+                        control_unique = numeric(),
+                        damage_unique = numeric(),
+                        stringsAsFactors = FALSE)
+  
+  # Find variable features (vf) for isolated cells
+  test <- NormalizeData(test) %>% FindVariableFeatures(nfeatures = 5000)
+  vf <- VariableFeatures(test)
+  
+  # Retrieve parent vf 
+  parent_vf <- variable_features[[paste0(project_name)]]
+  
+  # Calculate the overlap and unique genes to each set
+  intersection <- length(intersect(vf, parent_vf))
+  union <- length(union(vf, parent_vf))
+  damage_unique <- length(vf) - intersection
+  control_unique <- length(parent_vf) - intersection 
+  
+  # Find the actual genes unique to each case 
+  damage_unique_HVGs <- setdiff(vf, parent_vf)
+  control_unique_HVGs <- setdiff(parent_vf, vf)
+  
+  # Calculate the similarity (sm) of this vf set to that of the specified parent 
+  sm <- calculate_jaccard(vf, parent_vf)
+  
+  # Create a new row with method, set info & jaccard index (named after input string)
+  new_row <- data.frame(case = project_name, 
+                        jaccard_index = sm,
+                        intersection = intersection,
+                        control_unique = control_unique,
+                        damage_unique = damage_unique,
+                        stringsAsFactors = FALSE)
+  
+  # Append the new row to results
+  results <- rbind(results, new_row)
+  
+  # Return both results and HVGs
+  return(list(results = results, 
+              HVGs = list(damage_HVGs = damage_unique_HVGs, 
+                          control_HVGs = control_unique_HVGs)))
+}
+
+# Run through all cases with a loop that appends results and HVGs
+hvg_parent_v_unfiltered <- data.frame(case = character(),
+                                      jaccard_index = numeric(),
+                                      intersection = numeric(), 
+                                      control_unique = numeric(),
+                                      damage_unique = numeric(),
+                                      stringsAsFactors = FALSE)
+
+HVGs <- list()
+
+for (item in test_list) {
+  
+  cat("\n")
+  message(item$project_name)
+  
+  result <- compare_sets(test = item$test, 
+                         damaged_percent = item$damaged_percent,
+                         project_name = item$project_name)
+  
+  # Append the results to the dataframe
+  hvg_parent_v_unfiltered <- rbind(hvg_parent_v_unfiltered, result$results)
+  
+  # Update the HVGs list
+  HVGs[[item$project_name]] <- result$HVGs
+  
+}
+
+# Add damage percent 
+# Extract the number after the second underscore and add it to a new column
+hvg_parent_v_unfiltered$damage <- sub(".*_.*_(\\d+)$", "\\1", hvg_parent_v_unfiltered$case)
+hvg_parent_v_unfiltered$damage <- ifelse(!hvg_parent_v_unfiltered$damage %in% c(5, 10, 15, 20),
+  sub(".*_.*_([0-9]+\\.[0-9]+)$", "\\1", hvg_parent_v_unfiltered$case), 
+  hvg_parent_v_unfiltered$damage)
+
+# Save outputs 
+saveRDS(HVGs, "/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/HVGs_unique.rds")
+write.csv(hvg_parent_v_unfiltered, 
+          "/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/parent_v_unfiltered.csv",
+          quote = FALSE, row.names = FALSE)
+
 
 
 
@@ -258,6 +379,12 @@ compare_sets <- function(test,             # seurat of the damaged case of inter
   
   # Initialize empty df
   results = data.frame(method = character(),
+                       
+                       # Venn Diagram 
+                       control_unique = numeric(),
+                       damaged_unique = numeric(),
+                       intersection = numeric(), 
+                       
                        jaccard_index = numeric(),
                        propotion_damaged = numeric(),
                        stringsAsFactors = FALSE)
@@ -277,20 +404,30 @@ compare_sets <- function(test,             # seurat of the damaged case of inter
     proportion_damaged <- 1 - (length(cells) / dim(test)[2])
     
     # Find variable features (vf) for isolated cells
-    object <- NormalizeData(object) %>% FindVariableFeatures(nfeatures = 100)
+    object <- NormalizeData(object) %>% FindVariableFeatures(nfeatures = 5000)
     vf <- VariableFeatures(object)
     
     # Retrieve parent vf 
     parent_vf <- variable_features[[paste0(project_name)]]
     
+    
+    # Calculate the overlap and unique genes to each set
+    intersection <- length(intersect(vf, parent_vf))
+    damage_unique <- length(vf) - intersection
+    control_unique <- length(parent_vf) - intersection 
+    
+    
     # Calculate the similarity (sm) of this vf set to that of the specified parent 
     sm <- calculate_jaccard(vf, parent_vf)
       
-    # Create a new row with method & jaccard index (named after input string)
+    # Create a new row with method, set info & jaccard index (named after input string)
     new_row <- data.frame(method = method, stringsAsFactors = FALSE)
-    new_row[[project_name]] <- sm  # Assign similarity value to the dynamically named column
-    new_row[[paste0(project_name, "_", "damaged")]] <- proportion_damaged
-      
+    new_row[[project_name]] <- sm  
+    new_row[[paste0(project_name, "_", "proportion")]] <- proportion_damaged
+    new_row[[paste0(project_name, "_", "intersection")]] <- intersection
+    new_row[[paste0(project_name, "_", "control_unique")]] <- control_unique
+    new_row[[paste0(project_name, "_", "damage_unique")]] <- damage_unique
+    
     # Append the new row to results
     results <- rbind(results, new_row)
     
@@ -400,51 +537,88 @@ calculate_f1 <- function(set_A, set_B) {
 # Psuedo-bulk DEGs between cell type in control and stimulated case (5 cell types)
 # Compute the F1 score for each set of cell-type specific DEGs 
 
-# Calculate parent DEGs ----
-# Edit merge all together, column with dataset, add this to psuedobulking to get 3 replicates for each 
-parents_merged <-  merge(control_sim_1, 
-                         y = list(stimulated_sim_1, 
-                                  control_sim_2,  stimulated_sim_2, 
-                                  control_sim_3,  stimulated_sim_3), 
-                        add.cell.ids = c("control_1", "stimulated_1", 
-                                         "control_2", "stimulated_2",
-                                         "control_3", "stimulated_3"), 
-                        project = "sim")
 
-# Pseudobulk counts (average expression of cell types, not cells, are used)
-parents_merged$stim <- gsub("_[0-9]+", "", parents_merged$orig.ident)
-parents_psuedo <- AggregateExpression(parents_merged, assays = "RNA", return.seurat = T, group.by = c("orig.ident", "celltype", "stim"))
+# Calculate control DEGs ----
 
-# Add meta data column with celltype & stimulated status & set this to the Idents
-parents_psuedo$celltype.stim <- paste0(parents_psuedo$celltype, "_", parents_psuedo$stim)
-Idents(parents_psuedo) <- "celltype.stim"
+# In a cell-type specific manner, find the DEGs for each damage case (2.5, 5, 10, 15, 20)
 
-# DEG 
-sets <- list(
-  list(name = "B", ident_1 = "B_control", ident_2 = "B_stimulated"), 
-  list(name = "DC", ident_1 = "DC_control", ident_2 = "DC_stimulated"), 
-  list(name = "Monocyte", ident_1 = "Monocyte_control", ident_2 = "Monocyte_stimulated"), 
-  list(name = "NK", ident_1 = "NK_control", ident_2 = "NK_stimulated"), 
-  list(name = "T", ident_1 = "T_control", ident_2 = "T_stimulated"))
+# Helper function for merging across 2.5, 5, 10, 15, 20 cases
+merge_seurat_objects <- function(damage_percentage) {
   
-
-parent_DEGs <- list()
-
-for (set in sets){
+  # Retrieve datasets
+  control_sim_1 <- seurat_objects[[paste0("control_sim_1_", damage_percentage)]]
+  control_sim_2 <- seurat_objects[[paste0("control_sim_2_", damage_percentage)]]
+  control_sim_3 <- seurat_objects[[paste0("control_sim_3_", damage_percentage)]]
+  stimulated_sim_1 <- seurat_objects[[paste0("stimulated_sim_1_", damage_percentage)]]
+  stimulated_sim_2 <- seurat_objects[[paste0("stimulated_sim_2_", damage_percentage)]]
+  stimulated_sim_3 <- seurat_objects[[paste0("stimulated_sim_3_", damage_percentage)]]
   
-  # Run DESeq2 
-  bulk.deg <- FindMarkers(object = parents_psuedo, 
-                          ident.1 = set$ident_1, 
-                          ident.2 = set$ident_2,
-                          test.use = "DESeq2")
-  
-  # Keep only significantly differentially expressed genes 
-  bulk.deg <- subset(bulk.deg, (p_val_adj <= 0.05) & (p_val_adj != 0))
-  bulk.deg <- rownames(bulk.deg)
-
-  parent_DEGs[[set$name]] <- bulk.deg
-  
+  # Merge all 
+  merged <- merge(control_sim_1, 
+                  y = list(stimulated_sim_1, 
+                           control_sim_2, stimulated_sim_2, 
+                           control_sim_3, stimulated_sim_3), 
+                  add.cell.ids = c("control_1", "stimulated_1", 
+                                   "control_2", "stimulated_2",
+                                   "control_3", "stimulated_3"), 
+                  project = "sim")
+  return(merged)
 }
+
+# Helper function to perform pseudo-bulking and DEG analysis
+perform_deg_analysis <- function(merged) {
+  
+  # Pseudobulk counts (average expression of cell types, not cells, are used)
+  merged$stim <- gsub("_[0-9]+", "", merged$orig.ident)
+  psuedo <- AggregateExpression(merged, assays = "RNA", return.seurat = TRUE, group.by = c("orig.ident", "celltype", "stim"))
+  
+  # Add meta data column with celltype & stimulated status & set this to the Idents
+  psuedo$celltype.stim <- paste0(psuedo$celltype, "_", psuedo$stim)
+  Idents(psuedo) <- "celltype.stim"
+  
+  # DEG 
+  sets <- list(
+    list(name = "B", ident_1 = "B_control", ident_2 = "B_stimulated"), 
+    list(name = "DC", ident_1 = "DC_control", ident_2 = "DC_stimulated"), 
+    list(name = "Monocyte", ident_1 = "Monocyte_control", ident_2 = "Monocyte_stimulated"), 
+    list(name = "NK", ident_1 = "NK_control", ident_2 = "NK_stimulated"), 
+    list(name = "T", ident_1 = "T_control", ident_2 = "T_stimulated")
+  )
+  
+  parent_DEGs <- list()
+  
+  for (set in sets) {
+    # Check if both identifiers are present in the data and have a size of at least 3
+    if (set$ident_1 %in% names(table(Idents(psuedo))) & set$ident_2 %in% names(table(Idents(psuedo))) & 
+        table(Idents(psuedo))[set$ident_1] >= 3 & table(Idents(psuedo))[set$ident_2] >= 3) {
+      
+      # Run DESeq2 
+      bulk.deg <- FindMarkers(object = psuedo, 
+                              ident.1 = set$ident_1, 
+                              ident.2 = set$ident_2,
+                              test.use = "DESeq2")
+      
+      # Keep only significantly differentially expressed genes 
+      bulk.deg <- subset(bulk.deg, (p_val_adj <= 0.05) & (p_val_adj != 0))
+      bulk.deg <- rownames(bulk.deg)
+      
+      parent_DEGs[[set$name]] <- bulk.deg
+    }
+  }
+  
+  return(parent_DEGs)
+}
+
+# Iterate over each damage percentage and perform the analysis
+damage_percentages <- c("2.5", "5", "10", "15", "20")
+all_parent_DEGs <- list()
+
+for (damage_percentage in damage_percentages) {
+  merged <- merge_seurat_objects(damage_percentage)
+  parent_DEGs <- perform_deg_analysis(merged)
+  all_parent_DEGs[[paste0("damage_", damage_percentage)]] <- parent_DEGs
+}
+
 
 # Calculate unfiltered damaged DEGs ----
 
@@ -476,26 +650,22 @@ compare_deg_sets <- function(damage_percent,  # Case of interest (2.5, 5, 10, 15
   # Sample names into column
   merged$dataset <- sub("(_[^_]+).*", "\\1", rownames(merged@meta.data))
   merged$stim <- gsub("_[0-9]+", "", merged$dataset)
-
-    
-  # Identify & isolate true cells for the method
-  cells <- rownames(merged@meta.data)[merged[[method]] == "cell"]
-  meta_data <- merged@meta.data[cells,]
-  matrix <- merged@assays$RNA$counts[, cells]
-  matrix <- round(matrix)
-  object <- CreateSeuratObject(counts = matrix)
-  object@meta.data <-  meta_data
-    
+  
+  
   # Create psuedobulk counts =
-  object_psuedo <- AggregateExpression(object, assays = "RNA", return.seurat = T, group.by = c("celltype", "stim", "dataset"))
+  merged_psuedo <- AggregateExpression(merged, assays = "RNA", return.seurat = T, group.by = c("celltype", "stim", "dataset"))
+  
   
   # Add meta data column with celltype & stimulated status & set this to the Idents
-  object_psuedo$celltype.stim <- paste0(object_psuedo$celltype, "_", object_psuedo$stim)
-  Idents(object_psuedo) <- "celltype.stim"
-    
+  merged_psuedo$celltype.stim <- paste0(merged_psuedo$celltype, "_", merged_psuedo$stim)
+  Idents(merged_psuedo) <- "celltype.stim"
+  
+  # Ensure integers 
+  merged_psuedo@assays$RNA$counts <- round(merged_psuedo@assays$RNA$counts)
+  
   # Create a table of the counts of each identifier
-  ident_counts <- table(Idents(object_psuedo))
-    
+  ident_counts <- table(Idents(merged_psuedo))
+  
   # DEG   
   sets <- list(
     list(name = "B", ident_1 = "B_control", ident_2 = "B_stimulated"), 
@@ -503,54 +673,59 @@ compare_deg_sets <- function(damage_percent,  # Case of interest (2.5, 5, 10, 15
     list(name = "Monocyte", ident_1 = "Monocyte_control", ident_2 = "Monocyte_stimulated"), 
     list(name = "NK", ident_1 = "NK_control", ident_2 = "NK_stimulated"), 
     list(name = "T", ident_1 = "T_control", ident_2 = "T_stimulated"))
-    
+  
+  object_DEGs <- list()
+  
   for (set in sets) {
+    
+    # Check if both identifiers are present in the data and have a size of at least 3
+    if (set$ident_1 %in% names(ident_counts) & set$ident_2 %in% names(ident_counts) & 
+        ident_counts[set$ident_1] >= 3 & ident_counts[set$ident_2] >= 3) {
       
-      # Check if both identifiers are present in the data and have a size of at least 3
-      if (set$ident_1 %in% names(ident_counts) & set$ident_2 %in% names(ident_counts) & 
-          ident_counts[set$ident_1] >= 3 & ident_counts[set$ident_2] >= 3) {
-        
-        # Run DESeq2 
-        bulk.deg <- FindMarkers(object = object_psuedo, 
-                                ident.1 = set$ident_1, 
-                                ident.2 = set$ident_2,
-                                test.use = "DESeq2")
-        
-        # Keep only significantly differentially expressed genes 
-        bulk.deg <- subset(bulk.deg, (p_val_adj <= 0.05) & (p_val_adj != 0))
-        bulk.deg <- rownames(bulk.deg)
-        
-        object_DEGs[[set$name]] <- bulk.deg
-        
-      } else {
-        
-        cat("\n")
-        message("Skipped ", set)
-        cat("\n")
-        
-        next
-      }
+      # Run DESeq2 
+      bulk.deg <- FindMarkers(object = merged_psuedo, 
+                              ident.1 = set$ident_1, 
+                              ident.2 = set$ident_2,
+                              test.use = "DESeq2")
+      
+      # Keep only significantly differentially expressed genes 
+      bulk.deg <- subset(bulk.deg, (p_val_adj <= 0.05) & (p_val_adj != 0))
+      bulk.deg <- rownames(bulk.deg)
+      
+      object_DEGs[[set$name]] <- bulk.deg
+      
+    } else {
+      
+      cat("\n")
+      message("Skipped ", set)
+      cat("\n")
+      
+      next
     }
-    
-    # Compare the DEGs of the test, filtered object to the parent DEGs for each cell type
-    B_F1 <- calculate_f1(parent_DEGs$B, object_DEGs$B)
-    DC_F1 <- calculate_f1(parent_DEGs$DC, object_DEGs$DC)
-    Monocyte_F1 <- calculate_f1(parent_DEGs$Monocyte, object_DEGs$Monocyte)
-    NK_F1 <- calculate_f1(parent_DEGs$NK, object_DEGs$NK)
-    T_F1 <- calculate_f1(parent_DEGs$T, object_DEGs$T)
-    
-    median_F1 <- median(B_F1, DC_F1, Monocyte_F1,  NK_F1, T_F1)
+  }
+  
+  # Compare the DEGs of the test, filtered object to the parent DEGs for each cell type
+  B_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$B, object_DEGs$B)
+  DC_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$DC, object_DEGs$DC)
+  Monocyte_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$Monocyte, object_DEGs$Monocyte)
+  NK_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$NK, object_DEGs$NK)
+  T_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$T, object_DEGs$T)
+  
+  # Calculate the median across cell types 
+  median_F1 <- median(c(B_F1, DC_F1, Monocyte_F1,  NK_F1, T_F1), na.rm = TRUE)
   
   return(median_F1)
   
 }
 
+
 # Run for each case of interest 
-uf_damaged_2.5 <- compare_deg_sets(damage_percent = "2.5")
-uf_damaged_5 <- compare_deg_sets(damage_percent = "5")
-uf_damaged_10 <- compare_deg_sets(damage_percent = "10") 
-uf_damaged_15 <- compare_deg_sets(damage_percent = "15") 
-uf_damaged_20 <- compare_deg_sets(damage_percent = "20") 
+uf_damaged_2.5 <- compare_deg_sets(damage_percent = "2.5") # 0.9822
+uf_damaged_5 <- compare_deg_sets(damage_percent = "5")     # 0.9814
+uf_damaged_10 <- compare_deg_sets(damage_percent = "10")   # 0.9643
+uf_damaged_15 <- compare_deg_sets(damage_percent = "15")   # 0.9457
+uf_damaged_20 <- compare_deg_sets(damage_percent = "20")   # 0.9250
+
 
 
 # Calculate DEGs of the test cases and compare to parent ----
@@ -657,14 +832,16 @@ compare_deg_sets <- function(damage_percent,  # Case of interest (2.5, 5, 10, 15
       }
     }
     
-    # Compare the DEGs of the test, filtered object to the parent DEGs for each cell type
-    B_F1 <- calculate_f1(parent_DEGs$B, object_DEGs$B)
-    DC_F1 <- calculate_f1(parent_DEGs$DC, object_DEGs$DC)
-    Monocyte_F1 <- calculate_f1(parent_DEGs$Monocyte, object_DEGs$Monocyte)
-    NK_F1 <- calculate_f1(parent_DEGs$NK, object_DEGs$NK)
-    T_F1 <- calculate_f1(parent_DEGs$T, object_DEGs$T)
+ 
     
-    median_F1 <- median(B_F1, DC_F1, Monocyte_F1,  NK_F1, T_F1)
+    # Compare the DEGs of the test, filtered object to the parent DEGs for each cell type
+    B_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$B, object_DEGs$B)
+    DC_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$DC, object_DEGs$DC)
+    Monocyte_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$Monocyte, object_DEGs$Monocyte)
+    NK_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$NK, object_DEGs$NK)
+    T_F1 <- calculate_f1(all_parent_DEGs[[paste0("damage_", damage_percent)]]$T, object_DEGs$T)
+    
+    median_F1 <- mean(c(B_F1, DC_F1, Monocyte_F1,  NK_F1, T_F1), na.rm = TRUE)
     
     # Create a new row with method & F1 score 
     new_row <- data.frame(method = method, stringsAsFactors = FALSE)
@@ -693,6 +870,20 @@ damaged_15 <- compare_deg_sets(damage_percent = "15")
 damaged_20 <- compare_deg_sets(damage_percent = "20") 
 
 
+# Merge median values for plotting 
+combined_deg_medians <- damaged_2.5 %>%
+  dplyr::select(method, damaged_2.5) %>%
+  full_join(damaged_5 %>% dplyr::select(method, damaged_5), by = "method") %>%
+  full_join(damaged_10 %>% dplyr::select(method, damaged_10), by = "method") %>%
+  full_join(damaged_15 %>% dplyr::select(method, damaged_15), by = "method") %>%
+  full_join(damaged_20 %>% dplyr::select(method, damaged_20), by = "method")
+
+# Find median 
+combined_deg_medians$median <- apply(combined_deg_medians[, c("damaged_2.5", "damaged_5", "damaged_10", "damaged_15", "damaged_20")], 1, median, na.rm = TRUE)
+combined_deg_medians$proportion <- combined_medians$median_proportion
+View(combined_deg_medians)
+
+write.csv(combined_deg_medians, "/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/deg_correctness.csv", quote = FALSE, row.names = FALSE)
 
 
 
