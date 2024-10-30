@@ -47,24 +47,58 @@ mLiver <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mLiver
 mLung <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mLung.csv")
 mPBMC <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mPBMC.csv")
 
+
+# Simulated 
+# Damaged strategy outputs (dfs)
+parent_directory_df <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/benchmark_results/"
+
+# Store all resulting output dfs in list 
+simulated <- list()
+for (condition in conditions) {
+  for (percentage in percentages) {
+    for (rep in reps) {
+      # Construct the file name
+      file_name <- paste0(condition, "_", rep, "_", percentage, ".csv")
+      file_path <- file.path(parent_directory_df, file_name)
+      
+      # Check if the file exists before reading
+      if (file.exists(file_path)) {
+        
+        # Read the seurat object 
+        data <- read.csv(file_path)
+        
+        # Store the data in the list with a meaningful name
+        simulated[[paste0(condition, "_", rep, "_", percentage)]] <- data
+      }
+    }
+  }
+}
+
+# Check same 
+View(simulated$control_sim_1_2.5)
+
 # Define palette
 
+# Define the colors
 strategy_colours <- c(
   "ddqc" = "#A799C9",
   "DropletQC" = "#E7E4F6",
   "ensembleKQC" = "#808C98", 
   "miQC" = "#CED5DB", 
-  "valiDrops" = "#88A1BD",
-  "all" = "#D3E2F6",
-  "mito.isolated." = "#A6BEAE", 
-  "mito" = "#DCECE2", 
-  "mito_ribo" = "#9DBD78",
-  "malat1" = "#D7E7BE"
+  "scater" = "#88A1BD", 
+  "valiDrops" = "#D3E2F6",
+  "manual_all" = "#4F618F",
+  "manual_mito_isolated" = "#A6BEAE", 
+  "manual_mito" = "#DCECE2", 
+  "manual_mito_ribo" = "#9DBD78",
+  "manual_malat1" = "#D7E7BE"
 )
 
+
 # Define the desired order
-desired_order <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
-                   "all", "mito.isolated.", "mito", "mito_ribo", "malat1")
+desired_order <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+                    "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
+)
 
 
 # Define theme 
@@ -76,7 +110,7 @@ barplot_theme <- function() {
       legend.position = "none",
       legend.justification = "center",
       axis.text = element_text(size = 18),
-      axis.text.x = element_blank(),
+      # axis.text.x = element_blank(),
       axis.ticks.x = element_blank(),
       axis.title = element_blank(),
       axis.ticks.y = element_blank(),
@@ -104,8 +138,8 @@ barplot_theme <- function() {
 
 find_proportion_damaged <- function(data, project_name){
   
-  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
-                   "all", "mito.isolated.", "mito", "mito_ribo", "malat1")]
+  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+                   "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")]
   
   # Calculate damaged proportion for each column
   damaged_proportion <- sapply(data, function(column) {
@@ -123,6 +157,14 @@ find_proportion_damaged <- function(data, project_name){
 }
 
 # Run through all datasets
+# Ground truth 
+apoptotic_df <- find_proportion_damaged(apoptotic, "apoptotic")
+pro_apoptotic_df <- find_proportion_damaged(pro_apoptotic, "pro_apoptotic")
+GM18507_dead_df <- find_proportion_damaged(GM18507_dead, "GM18507_dead")
+GM18507_dying_df <- find_proportion_damaged(GM18507_dying, "GM18507_dying")
+PDX_df <- find_proportion_damaged(PDX, "PDX")
+
+# Non ground truth 
 A549_df <- find_proportion_damaged(A549, "A549")
 dLiver_df <- find_proportion_damaged(dLiver, "dLiver")
 dLung_df <- find_proportion_damaged(dLung, "dLung")
@@ -136,13 +178,17 @@ hodgkin_df <- find_proportion_damaged(hodgkin, "hodgkin")
 hPBMC_df <- find_proportion_damaged(hPBMC, "hPBMC")
 Jurkat_df <- find_proportion_damaged(Jurkat, "Jurkat")
 mLiver_df <- find_proportion_damaged(mLiver, "mLiver")
-mLung_df <- find_proportion_damaged(mLung, "mLung") #
+mLung_df <- find_proportion_damaged(mLung, "mLung") 
 mPBMC_df <- find_proportion_damaged(mPBMC, "mPBMC")
-apoptotic_df <- find_proportion_damaged(apoptotic, "apoptotic")
-pro_apoptotic_df <- find_proportion_damaged(pro_apoptotic, "pro_apoptotic")
-GM18507_dead_df <- find_proportion_damaged(GM18507_dead, "GM18507_dead")
-GM18507_dying_df <- find_proportion_damaged(GM18507_dying, "GM18507_dying")
-PDX_df <- find_proportion_damaged(PDX, "PDX")
+
+# Simulated
+simulated_df <- list()
+for (name in names(simulated)){
+  
+  simulated_df[[name]] <-  find_proportion_damaged(simulated[[name]], as.character(name))
+
+}
+
 
 # List of data frames
 non_groundtruth_dfs <- list(A549_df, dLiver_df, dLung_df, dPBMC_df, ductal_df, 
@@ -153,10 +199,19 @@ groundtruth_dfs <- list(apoptotic_df, pro_apoptotic_df,
                         GM18507_dead_df, GM18507_dying_df, 
                         PDX_df)
 
+simulated_dfs <- list(simulated_df$control_sim_1_2.5, simulated_df$control_sim_1_5, simulated_df$control_sim_1_10, simulated_df$control_sim_1_15, simulated_df$control_sim_1_20,
+                      simulated_df$control_sim_2_2.5, simulated_df$control_sim_2_5, simulated_df$control_sim_2_10, simulated_df$control_sim_2_15, simulated_df$control_sim_2_20,
+                      simulated_df$control_sim_3_2.5, simulated_df$control_sim_3_5, simulated_df$control_sim_3_10, simulated_df$control_sim_3_15, simulated_df$control_sim_3_20,
+                      simulated_df$stimulated_sim_1_2.5, simulated_df$stimulated_sim_1_5, simulated_df$stimulated_sim_1_10, simulated_df$stimulated_sim_1_15, simulated_df$stimulated_sim_1_20,
+                      simulated_df$stimulated_sim_2_2.5, simulated_df$stimulated_sim_2_5, simulated_df$stimulated_sim_2_10, simulated_df$stimulated_sim_2_15, simulated_df$stimulated_sim_2_20,
+                      simulated_df$stimulated_sim_3_2.5, simulated_df$stimulated_sim_3_5, simulated_df$stimulated_sim_3_10, simulated_df$stimulated_sim_3_15, simulated_df$stimulated_sim_3_20
+)
+
 
 # Merge all data frames by 'strategy' column
 non_groundtruth_df <- reduce(non_groundtruth_dfs, full_join, by = "strategy")
 groundtruth_df <- reduce(groundtruth_dfs, full_join, by = "strategy")
+simulated_full_df <- reduce(simulated_dfs, full_join, by = "strategy")
 
 # Find median values 
 groundtruth_df <- groundtruth_df %>%
@@ -179,72 +234,86 @@ non_groundtruth_df <- non_groundtruth_df %>%
   ungroup() %>%
   mutate(strategy = factor(strategy, levels = desired_order))
 
-
-# Define the old and new strategy names
-old_strategy_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", "all", "mito.isolated.", "mito", "mito_ribo", "malat1")
-new_strategy_names <- c("ddqc   ", "DropletQC     ", "ensembleKQC    ", "miQC   ", "valiDrops   ",  "all    ", "mito (isolated)      ", "mito   ", "mito_ribo   ", "malat1   ")
-
-# Create a named vector for recoding
-rename_vector <- setNames(new_strategy_names, old_strategy_names)
-
-# Rename the entries in the strategy column for groundtruth_df
-groundtruth_df <- groundtruth_df %>%
-  mutate(strategy = recode(strategy, !!!rename_vector))
-
-# Rename the entries in the strategy column for non_groundtruth_df
-non_groundtruth_df <- non_groundtruth_df %>%
-  mutate(strategy = recode(strategy, !!!rename_vector))
+simulated_full_df <- simulated_full_df %>%
+  rowwise() %>%
+  mutate(
+    lowest_value = min(c_across(control_sim_1_2.5:stimulated_sim_3_20)),
+    highest_value = max(c_across(control_sim_1_2.5:stimulated_sim_3_20)),
+    median_value = median(c_across(control_sim_1_2.5:stimulated_sim_3_20))
+  ) %>%
+  ungroup() %>%
+  mutate(strategy = factor(strategy, levels = desired_order))
 
 
-# Edit colours 
-strategy_colours <- c(
-  "ddqc   " = "#A799C9",
-  "DropletQC     " = "#E7E4F6",
-  "ensembleKQC    " = "#808C98", 
-  "miQC   "  = "#CED5DB", 
-  "valiDrops   " = "#88A1BD", 
-  "all    " = "#D3E2F6",
-  "mito (isolated)      " = "#A6BEAE",
-  "mito   "  = "#DCECE2", 
-  "mito_ribo   " = "#9DBD78", 
-  "malat1   " = "#D7E7BE"
-)
 
 # Damaged proportion plots
 proportion_damaged_groundtruth_plot <- ggplot(groundtruth_df, aes(x = strategy, y = median_value, fill = strategy)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
   scale_fill_manual(values = strategy_colours) +
+  coord_flip() + 
+  scale_y_reverse(limits = c(60, 0)) +  # Reverse the y-axis
   labs(title = "a      Damaged proportion", y = "") + 
   barplot_theme() + 
-  theme(plot.title = element_text(hjust = -0.4, size = 22), 
-        plot.margin = margin(50, 20, 50, 30), 
+  theme(plot.title = element_blank(),
+        plot.margin = margin(50, 10, 50, 30), 
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 34, vjust = -0.5),
         legend.text = element_text(size = 22),
         legend.spacing.x = unit(1.0, 'cm'), 
-        legend.position = "bottom",
-        legend.justification = c(-0.05, -0.2)) + 
-  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1,default.unit="inch")) + ylim(0, 100)
+        legend.position = "none",
+        legend.justification = c(-0.05, -0.2), 
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA)) + 
+  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
+
+
 
 proportion_damaged_non_groundtruth_plot <- ggplot(non_groundtruth_df, aes(x = strategy, y = median_value, fill = strategy)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
   scale_fill_manual(values = strategy_colours) +
-  labs(title = "a     Damaged proportion", y = "") + 
+  coord_flip() + 
+  scale_y_reverse(limits = c(60, 0)) +  # Reverse the y-axis
+  labs(title = "a      Damaged proportion", y = "") + 
   barplot_theme() + 
-  theme(plot.title = element_text(hjust = -0.4, size = 24), 
-        plot.margin = margin(50, 20, 50, 30),  
-        legend.spacing.x = unit(1.0, 'cm'), 
+  theme(plot.title = element_blank(),
+        plot.margin = margin(50, 10, 50, 30), 
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 34, vjust = -0.5),
         legend.text = element_text(size = 22),
-        legend.position = "bottom",
-        legend.key.width = unit(0.6, 'cm'),
-        legend.justification = c(-0.05, -0.2)) + 
-  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1,default.unit="inch")) + ylim(0, 100)
+        legend.spacing.x = unit(1.0, 'cm'), 
+        legend.position = "none",
+        legend.justification = c(-0.05, -0.2), 
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA)) + 
+  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
+
+
+ 
+proportion_damaged_simulated_plot <- ggplot(simulated_full_df, aes(x = strategy, y = median_value, fill = strategy)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
+  scale_fill_manual(values = strategy_colours) +
+  coord_flip() + 
+  scale_y_reverse(limits = c(60, 0)) +  # Reverse the y-axis
+  labs(title = "a      Damaged proportion", y = "") + 
+  barplot_theme() + 
+  theme(plot.title = element_blank(),
+        plot.margin = margin(50, 10, 50, 30), 
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 34, vjust = -0.5),
+        legend.text = element_text(size = 22),
+        legend.spacing.x = unit(1.0, 'cm'), 
+        legend.position = "none",
+        legend.justification = c(-0.05, -0.2), 
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA)) + 
+  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
 
 
 
-damaged_proportion_plots <- (proportion_damaged_groundtruth_plot / proportion_damaged_non_groundtruth_plot)
-damaged_proportion_plots 
-
+proportion_damaged_simulated_plot | proportion_damaged_non_groundtruth_plot | proportion_damaged_groundtruth_plot
 
 #-------------------------------------------------------------------------------
 # PROPORTION UNIQUE
@@ -255,8 +324,9 @@ damaged_proportion_plots
 find_proportion_unique <- function(data, project_name, groundtruth = NULL) {
   
   # Define tools and columns of interest for the data frame 
-  tools <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
-             "all", "mito.isolated.", "mito", "mito_ribo", "malat1")
+  tools <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops", 
+             "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
+  
   columns <- c("orig.ident", tools)
   data <- data[, columns]
   
@@ -353,12 +423,22 @@ mLiver_udf <- find_proportion_unique(mLiver, "mLiver")
 mLung_udf <- find_proportion_unique(mLung, "mLung") #
 mPBMC_udf <- find_proportion_unique(mPBMC, "mPBMC")
 
+
+simulated_udf <- list()
+for (name in names(simulated)) {
+  
+  simulated_udf[[name]] <- find_proportion_unique(simulated[[name]], as.character(name))
+  
+}
+
+
 # Groundtruth specify damaged cell label 
 apoptotic_udf <- find_proportion_unique(apoptotic, "apoptotic", "HEK293_apoptotic")
 pro_apoptotic_udf <- find_proportion_unique(pro_apoptotic, "pro_apoptotic", "HEK293_proapoptotic")
 GM18507_dead_udf <- find_proportion_unique(GM18507_dead, "GM18507_dead", "GM18507_dead")
 GM18507_dying_udf <- find_proportion_unique(GM18507_dying, "GM18507_dying", "GM18507_dying")
 PDX_udf <- find_proportion_unique(PDX, "PDX", "PDX_dead")
+
 
 # List of proportion Unique Data Frames (udf) and proportion Correct Unique Data Frames (cudf)
 non_groundtruth_udfs <- list(A549_udf, dLiver_udf, dLung_udf, dPBMC_udf, ductal_udf, 
@@ -369,6 +449,15 @@ groundtruth_udfs <- list(apoptotic_udf$unique, pro_apoptotic_udf$unique,
                         GM18507_dead_udf$unique, GM18507_dying_udf$unique, 
                         PDX_udf$unique)
 
+# Simulated
+simulated_udfs <- list(simulated_udf$control_sim_1_2.5, simulated_udf$control_sim_1_5, simulated_udf$control_sim_1_10, simulated_udf$control_sim_1_15, simulated_udf$control_sim_1_20,
+                       simulated_udf$control_sim_2_2.5, simulated_udf$control_sim_2_5, simulated_udf$control_sim_2_10, simulated_udf$control_sim_2_15, simulated_udf$control_sim_2_20,
+                       simulated_udf$control_sim_3_2.5, simulated_udf$control_sim_3_5, simulated_udf$control_sim_3_10, simulated_udf$control_sim_3_15, simulated_udf$control_sim_3_20,
+                       simulated_udf$stimulated_sim_1_2.5, simulated_udf$stimulated_sim_1_5, simulated_udf$stimulated_sim_1_10, simulated_udf$stimulated_sim_1_15, simulated_udf$stimulated_sim_1_20,
+                       simulated_udf$stimulated_sim_2_2.5, simulated_udf$stimulated_sim_2_5, simulated_udf$stimulated_sim_2_10, simulated_udf$stimulated_sim_2_15, simulated_udf$stimulated_sim_2_20,
+                       simulated_udf$stimulated_sim_3_2.5, simulated_udf$stimulated_sim_3_5, simulated_udf$stimulated_sim_3_10, simulated_udf$stimulated_sim_3_15, simulated_udf$stimulated_sim_3_20
+)
+
 groundtruth_cudfs <- list(apoptotic_udf$correct, pro_apoptotic_udf$correct, 
                          GM18507_dead_udf$correct, GM18507_dying_udf$correct, 
                          PDX_udf$correct)
@@ -377,7 +466,9 @@ groundtruth_cudfs <- list(apoptotic_udf$correct, pro_apoptotic_udf$correct,
 # Merge all data frames by 'strategy' column
 non_groundtruth_udf <- reduce(non_groundtruth_udfs, full_join, by = "strategy")
 groundtruth_udf <- reduce(groundtruth_udfs, full_join, by = "strategy")
+simulated_udf <- reduce(simulated_udfs, full_join, by = "strategy")
 groundtruth_cudf <- reduce(groundtruth_cudfs, full_join, by = "strategy")
+
 
 # Find median values
 non_groundtruth_udf <- non_groundtruth_udf %>%
@@ -400,6 +491,16 @@ groundtruth_udf <- groundtruth_udf %>%
   ungroup() %>%
   mutate(strategy = factor(strategy, levels = desired_order))
 
+simulated_udf <- simulated_udf %>%
+  rowwise() %>%
+  mutate(
+    lowest_value = min(c_across(control_sim_1_2.5:stimulated_sim_3_20)),
+    highest_value = max(c_across(control_sim_1_2.5:stimulated_sim_3_20)),
+    median_value = median(c_across(control_sim_1_2.5:stimulated_sim_3_20))
+  ) %>%
+  ungroup() %>%
+  mutate(strategy = factor(strategy, levels = desired_order))
+
 groundtruth_cudf <- groundtruth_cudf %>%
   rowwise() %>%
   mutate(
@@ -411,45 +512,77 @@ groundtruth_cudf <- groundtruth_cudf %>%
  # Add the percent correctness to ground truth data frame
 groundtruth_udf$correct_percent <- groundtruth_cudf$correct_percent
 
-strategy_colours <- c(
-  "ddqc" = "#A799C9",
-  "DropletQC" = "#E7E4F6",
-  "ensembleKQC" = "#808C98", 
-  "miQC" = "#CED5DB", 
-  "valiDrops" = "#88A1BD",
-  "all" = "#D3E2F6",
-  "mito.isolated." = "#A6BEAE", 
-  "mito" = "#DCECE2", 
-  "mito_ribo" = "#9DBD78",
-  "malat1" = "#D7E7BE"
-)
-
 
 # Proportion unique plots 
 proportion_unique_groundtruth_plot <- ggplot(groundtruth_udf, aes(x = strategy, y = median_value, fill = strategy)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
-  geom_text(aes(y = highest_value + 5, label = ifelse(median_value != 0, correct_percent, "")), vjust = 0, hjust = 0.4, size = 6) +
   scale_fill_manual(values = strategy_colours) +
-  labs(title = "b     Unique damaged proportion", y = "") + 
+  coord_flip() + 
   barplot_theme() + 
-  theme(plot.title = element_text(hjust = -0.4, size = 22), 
-        plot.margin = margin(50, 20, 90, 20) # top right bottom left 
-        ) + ylim(0, 100)
+  theme(plot.title = element_blank(),
+        plot.margin = margin(50, 20, 50, 30), 
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 34, vjust = -0.5),
+        legend.text = element_text(size = 22),
+        legend.spacing.x = unit(1.0, 'cm'), 
+        legend.position = "none",
+        legend.justification = c(-0.05, -0.2), 
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA)) + 
+  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
+
+ground_prop_plots <- proportion_damaged_groundtruth_plot | proportion_unique_groundtruth_plot 
+ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/proportions_groundtruth_plot.png"), 
+       plot = ground_prop_plots, width = 14, height = 12, dpi = 300)
+
 
 proportion_unique_non_groundtruth_plot <- ggplot(non_groundtruth_udf, aes(x = strategy, y = median_value, fill = strategy)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
   scale_fill_manual(values = strategy_colours) +
-  labs(title = "b     Unique damaged proportion", y = "") + 
+  coord_flip() + 
   barplot_theme() + 
-  theme(plot.title = element_text(hjust = -0.4, size = 22),
-        plot.margin = margin(50, 20, 90, 20) # top right bottom left 
-        ) + ylim(0, 100)
+  theme(plot.title = element_blank(),
+        plot.margin = margin(50, 20, 50, 30), 
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 34, vjust = -0.5),
+        legend.text = element_text(size = 22),
+        legend.spacing.x = unit(1.0, 'cm'), 
+        legend.position = "none",
+        legend.justification = c(-0.05, -0.2), 
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA)) + 
+  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
+
+non_ground_prop_plots <- proportion_damaged_non_groundtruth_plot | proportion_unique_non_groundtruth_plot 
+ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/proportions_non_groundtruth_plot.png"), 
+       plot = non_ground_prop_plots, width = 14, height = 12, dpi = 300)
 
 
-unique_proportion_plots <- (proportion_unique_groundtruth_plot / proportion_unique_non_groundtruth_plot)
-unique_proportion_plots 
+proportion_unique_simulated_plot <- ggplot(simulated_udf, aes(x = strategy, y = median_value, fill = strategy)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
+  scale_fill_manual(values = strategy_colours) +
+  coord_flip() + 
+  barplot_theme() + 
+  theme(plot.title = element_blank(),
+        plot.margin = margin(50, 20, 50, 10), 
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 34, vjust = -0.5),
+        legend.text = element_text(size = 22),
+        legend.spacing.x = unit(1.0, 'cm'), 
+        legend.position = "none",
+        legend.justification = c(-0.05, -0.2), 
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA)) + 
+  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
+
+
+simulated_prop_plots <- proportion_damaged_simulated_plot | proportion_unique_simulated_plot 
+ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/proportions_simulated_plot.png"), 
+       plot = simulated_prop_plots, width = 14, height = 12, dpi = 300)
+
 
 
 
@@ -463,8 +596,8 @@ unique_proportion_plots
 calculate_similarity <- function(data){
   
   # Isolate columns of interest 
-  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
-                   "all", "mito.isolated.", "mito", "mito_ribo", "malat1")]
+  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+                   "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")]
   
   # Convert damaged/cell labels to binary 1/0
   data <- as.data.frame(lapply(data, function(x) ifelse(x == 'damaged', 1, 0)))
@@ -491,8 +624,8 @@ calculate_similarity <- function(data){
   kappa_matrix[is.nan(kappa_matrix)] <- 0
   
   # Name the rows & columns 
-  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
-                  "all", "mito (isolated)", "mito", "mito (ribo)", "malat1")
+  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
 
   rownames(kappa_matrix) <- colnames(kappa_matrix) <- tool_names
   
@@ -501,6 +634,14 @@ calculate_similarity <- function(data){
 }
 
 # Apply the calculation
+# Ground truth 
+apoptotic_matrix <- calculate_similarity(apoptotic)
+pro_apoptotic_matrix <- calculate_similarity(pro_apoptotic)
+GM18507_dead_matrix <- calculate_similarity(GM18507_dead)
+GM18507_dying_matrix <- calculate_similarity(GM18507_dying)
+PDX_matrix <- calculate_similarity(PDX)
+
+# Non-ground truth
 A549_matrix <- calculate_similarity(A549)
 dLiver_matrix <- calculate_similarity(dLiver)
 dLung_matrix <- calculate_similarity(dLung)
@@ -516,12 +657,14 @@ Jurkat_matrix <- calculate_similarity(Jurkat)
 mLiver_matrix <- calculate_similarity(mLiver)
 mLung_matrix <- calculate_similarity(mLung)
 mPBMC_matrix <- calculate_similarity(mPBMC)
-apoptotic_matrix <- calculate_similarity(apoptotic)
-pro_apoptotic_matrix <- calculate_similarity(pro_apoptotic)
-GM18507_dead_matrix <- calculate_similarity(GM18507_dead)
-GM18507_dying_matrix <- calculate_similarity(GM18507_dying)
-PDX_matrix <- calculate_similarity(PDX)
 
+# Simulated
+simulated_matrix <- list()
+for (name in names(simulated)){
+  
+  simulated_matrix[[name]] <- calculate_similarity(simulated[[name]])
+  
+}
 
 
 # Calculate the median similarity scores across input datasets
@@ -536,14 +679,14 @@ calculate_median <- function(input_list) {
   }
   
   # Combine into array
-  matrices_array <- array(unlist(matrices), dim = c(10, 10, length(matrices)))
+  matrices_array <- array(unlist(matrices), dim = c(11, 11, length(matrices)))
   
   # Calculate the median for each position across the matrices
   result <- apply(matrices_array, c(1, 2), median, na.rm = TRUE)
   
+
+  return(result) # 11 x 11 matrix 
   
-  
-  return(result) # 10 x 10 matrix 
 }
 
 # Define lists for input
@@ -553,17 +696,26 @@ groundtruth_matrices <- list(A549_matrix, dLiver_matrix, dLung_matrix, dPBMC_mat
 
 non_groundtruth_matrices <- list(apoptotic_matrix, pro_apoptotic_matrix, GM18507_dead_matrix, GM18507_dying_matrix, PDX_matrix)
 
+# Simulated
+simulated_matrices <- list(simulated_matrix$control_sim_1_2.5, simulated_matrix$control_sim_1_5, simulated_matrix$control_sim_1_10, simulated_matrix$control_sim_1_15, simulated_matrix$control_sim_1_20,
+                           simulated_matrix$control_sim_2_2.5, simulated_matrix$control_sim_2_5, simulated_matrix$control_sim_2_10, simulated_matrix$control_sim_2_15, simulated_matrix$control_sim_2_20,
+                           simulated_matrix$control_sim_3_2.5, simulated_matrix$control_sim_3_5, simulated_matrix$control_sim_3_10, simulated_matrix$control_sim_3_15, simulated_matrix$control_sim_3_20,
+                           simulated_matrix$stimulated_sim_1_2.5, simulated_matrix$stimulated_sim_1_5, simulated_matrix$stimulated_sim_1_10, simulated_matrix$stimulated_sim_1_15, simulated_matrix$stimulated_sim_1_20,
+                           simulated_matrix$stimulated_sim_2_2.5, simulated_matrix$stimulated_sim_2_5, simulated_matrix$stimulated_sim_2_10, simulated_matrix$stimulated_sim_2_15, simulated_matrix$stimulated_sim_2_20,
+                           simulated_matrix$stimulated_sim_3_2.5, simulated_matrix$stimulated_sim_3_5, simulated_matrix$stimulated_sim_3_10, simulated_matrix$stimulated_sim_3_15, simulated_matrix$stimulated_sim_3_20
+)
 
 # Find the median 
 groundtruth_similarity <- calculate_median(groundtruth_matrices)
 non_groundtruth_similarity <- calculate_median(non_groundtruth_matrices)
+simulated_similarity <- calculate_median(simulated_matrices)
 
 PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
   
   # Add the tool names -----
   similarity_matrix <- matrix
-  rownames(similarity_matrix) <- colnames(similarity_matrix) <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
-                                                                  "all", "mito (isolated)", "mito", "mito (ribo)", "malat1")
+  rownames(similarity_matrix) <- colnames(similarity_matrix) <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
   
   # Add a small constant to the diagonal elements to avoid zero variance issues
   diag(similarity_matrix) <- diag(similarity_matrix) + 1e-6
@@ -580,35 +732,7 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
   # Add a column for the tool names
   pca_coords$tool <- rownames(similarity_matrix)
   
-  
-  # Define the nudge directions to avoid label overlap 
-  pca_coords$nudge_y <- ifelse(
-    pca_coords$tool %in% c("ensembleKQC"), 0.9,  
-    ifelse(pca_coords$tool %in% c("DropletQC"), 0.05,  
-           ifelse(pca_coords$tool %in% c("valiDrops"), -1.2,  
-                  ifelse(pca_coords$tool %in% c("malat1", "miQC", "all"), 0.5,  
-                         ifelse(pca_coords$tool %in% c("ddqc"), -0.2, 
-                                -0.5))))  
-  )
-  
-  
-  # Name the rows & columns 
-  
-  strategy_colours <- c(
-    "ddqc" = "#A799C9",
-    "DropletQC" = "#E7E4F6",
-    "ensembleKQC" = "#808C98", 
-    "miQC" = "#CED5DB", 
-    "valiDrops" = "#88A1BD",
-    "all" = "#D3E2F6",
-    "mito (isolated)" = "#A6BEAE", 
-    "mito" = "#DCECE2", 
-    "mito (ribo)" = "#9DBD78",
-    "malat1" = "#D7E7BE"
-  )
-  
-  
-  
+
   # Plot without legend (clustered viewing)
   pca_plot <- ggplot(pca_coords, aes(x = PC1, y = PC2, fill = tool, label = tool)) +
     geom_point(size = 10, shape = 21, color = "white") +  
@@ -625,7 +749,8 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
       panel.border = element_rect(color = "black", fill = NA, size = 0.5),
       axis.text = element_blank(),
       axis.ticks =  element_blank(),
-      axis.title = element_text(size = 18),
+      axis.title.y = element_text(size = 18, vjust = 0.5),
+      axis.title.x = element_text(size = 18, vjust = -0.5),
       plot.title = element_text(hjust = -0.1, vjust = 3.8, face = "bold", size = 22), 
       plot.background = element_rect(fill = "white", color = NA),
       plot.margin = margin(50, 50, 68, 50))
@@ -634,14 +759,24 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
   # Return output -----
   return(pca_plot)
   
-}
+} 
 
 # Run the function on each covariate case
-groundtruth_similarity_PCA <- PlotSimilarity(groundtruth_similarity, title = "d     Tool similarity (Cohen's Kappa)")
-non_groundtruth_similarity_PCA <- PlotSimilarity(non_groundtruth_similarity, title = "d     Tool similarity (Cohen's Kappa)")
+groundtruth_similarity_PCA <- PlotSimilarity(matrix = groundtruth_similarity, title = "")
+ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/groundtruth_PCA.png"), 
+       plot = groundtruth_similarity_PCA, width = 8, height = 7, dpi = 300)
 
-similarity_plots <- groundtruth_similarity_PCA / non_groundtruth_similarity_PCA
-similarity_plots
+
+non_groundtruth_similarity_PCA <- PlotSimilarity(non_groundtruth_similarity, title = "")
+ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/non_groundtruth_PCA.png"), 
+       plot = non_groundtruth_similarity_PCA, width = 8, height = 7, dpi = 300)
+
+
+simulated_similarity_PCA <- PlotSimilarity(simulated_similarity, title = "")
+ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/simulated_PCA.png"), 
+       plot = simulated_similarity_PCA, width = 8, height = 7, dpi = 300)
+
+
 
 #-------------------------------------------------------------------------------
 # CONSISTENCY SCORES  
@@ -651,25 +786,11 @@ similarity_plots
 
 # consistency = (weighting constant x similarity deviation) + (weighting constant x proportion damaged detection deviation
 
-strategy_colours <- c(
-  "ddqc" = "#A799C9",
-  "DropletQC" = "#E7E4F6",
-  "ensembleKQC" = "#808C98", 
-  "miQC" = "#CED5DB", 
-  "valiDrops" = "#88A1BD",
-  "all" = "#D3E2F6",
-  "mito.isolated." = "#A6BEAE", 
-  "mito" = "#DCECE2", 
-  "mito_ribo" = "#9DBD78",
-  "malat1" = "#D7E7BE"
-)
-
-
 calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
   
   
-  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
-                  "all", "mito.isolated.", "mito", "mito_ribo", "malat1")
+  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops", 
+                  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
 
     # Initialize an empty data frame to store the standard deviation of Kappa scores for each tool
   deviation_scores <- data.frame(tool = character(),
@@ -733,7 +854,7 @@ calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
   return(deviation_scores)
 }
 
-# Example usage
+
 groundtruth_kappa_matrices <- list(apoptotic_matrix, apoptotic_matrix, GM18507_dead_matrix, GM18507_dying_matrix, PDX_matrix)
 non_groundtruth_kappa_matrices <- list(A549_matrix, dLiver_matrix, dLung_matrix, 
                                        dPBMC_matrix, ductal_matrix, glio_matrix, HCT116_matrix,
@@ -741,33 +862,71 @@ non_groundtruth_kappa_matrices <- list(A549_matrix, dLiver_matrix, dLung_matrix,
                                        hPBMC_matrix, Jurkat_matrix, mLiver_matrix,
                                        mLung_matrix, mPBMC_matrix 
 )
-
+simulated_kappa_matrices <- list(simulated_matrix$control_sim_1_2.5, simulated_matrix$control_sim_1_5, simulated_matrix$control_sim_1_10, simulated_matrix$control_sim_1_15, simulated_matrix$control_sim_1_20,
+                           simulated_matrix$control_sim_2_2.5, simulated_matrix$control_sim_2_5, simulated_matrix$control_sim_2_10, simulated_matrix$control_sim_2_15, simulated_matrix$control_sim_2_20,
+                           simulated_matrix$control_sim_3_2.5, simulated_matrix$control_sim_3_5, simulated_matrix$control_sim_3_10, simulated_matrix$control_sim_3_15, simulated_matrix$control_sim_3_20,
+                           simulated_matrix$stimulated_sim_1_2.5, simulated_matrix$stimulated_sim_1_5, simulated_matrix$stimulated_sim_1_10, simulated_matrix$stimulated_sim_1_15, simulated_matrix$stimulated_sim_1_20,
+                           simulated_matrix$stimulated_sim_2_2.5, simulated_matrix$stimulated_sim_2_5, simulated_matrix$stimulated_sim_2_10, simulated_matrix$stimulated_sim_2_15, simulated_matrix$stimulated_sim_2_20,
+                           simulated_matrix$stimulated_sim_3_2.5, simulated_matrix$stimulated_sim_3_5, simulated_matrix$stimulated_sim_3_10, simulated_matrix$stimulated_sim_3_15, simulated_matrix$stimulated_sim_3_20
+)
 
 groundtruth_deviation_scores <- calculate_deviation_scores(groundtruth_kappa_matrices, groundtruth_df)
 non_groundtruth_deviation_scores <- calculate_deviation_scores(non_groundtruth_kappa_matrices, non_groundtruth_df)
+simulated_deviation_scores <- calculate_deviation_scores(simulated_kappa_matrices, simulated_df)
 
 
 # Plot 
 consistency_groundtruth_plot <- ggplot(groundtruth_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
   geom_bar(stat = "identity") +
   scale_fill_manual(values = strategy_colours) +
-  labs(title = "c     Tool consistency", y = "") + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1), limits = c(0, 1)) +
+  coord_flip() + 
+  labs(title = "", y = "") + 
   barplot_theme() + 
   theme(plot.title = element_text(hjust = -0.3, size = 22),
-        plot.margin = margin(50, 20, 90, 20) # top right bottom left 
-        ) + ylim(0, 1)
+        plot.margin = margin(50, 20, 90, 20),
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 30, vjust = -0.7),
+        plot.background = element_rect(fill = "white", color = NA)
+        ) 
+ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/consistency_groundtruth_plot.png"), 
+       plot = consistency_groundtruth_plot, width = 7, height = 12, dpi = 300)
+
 
 consistency_non_groundtruth_plot <- ggplot(non_groundtruth_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
   geom_bar(stat = "identity") +
+  coord_flip() + 
   scale_fill_manual(values = strategy_colours) +
-  labs(title = "c     Tool consistency", y = "") + 
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1), limits = c(0, 1)) +
+  labs(title = "", y = "") + 
   barplot_theme() + 
   theme(plot.title = element_text(hjust = -0.3, size = 22),
-        plot.margin = margin(50, 20, 90, 20) # top right bottom left 
-        ) + ylim(0, 1)
+        plot.margin = margin(50, 20, 90, 20), # top right bottom left 
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 30, vjust = -0.7),
+        plot.background = element_rect(fill = "white", color = NA)
+        ) 
+ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/consistency_non_groundtruth_plot.png"), 
+       plot = consistency_non_groundtruth_plot , width = 7, height = 12, dpi = 300)
 
+consistency_simulated_plot <- ggplot(simulated_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
+  geom_bar(stat = "identity") +
+  coord_flip() + 
+  scale_fill_manual(values = strategy_colours) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1), limits = c(0, 1)) +
+  labs(title = "", y = "") + 
+  barplot_theme() + 
+  theme(plot.title = element_text(hjust = -0.3, size = 22),
+        plot.margin = margin(50, 20, 90, 20), # top right bottom left 
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 30, vjust = -0.7),
+        plot.background = element_rect(fill = "white", color = NA)
+  ) 
 
-consistency_groundtruth_plot / consistency_non_groundtruth_plot 
+ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/consistency_simulated_plot.png"), 
+       plot = consistency_simulated_plot, width = 7, height = 12, dpi = 300)
+
+consistency_groundtruth_plot | consistency_non_groundtruth_plot | consistency_simulated_plot
 
 
 #-------------------------------------------------------------------------------
@@ -787,6 +946,12 @@ consistency_groundtruth_plot / consistency_non_groundtruth_plot
 # total_entries <- 0
 # for (df in data_frames) {
 #   total_entries <- total_entries + dim(df)[1]
+# }
+# 
+# # Simulated
+# total_entries <- 0
+# for (name in names(simulated)) {
+#    total_entries <- total_entries + dim(simulated[[name]])[1]
 # }
 # 
 # # Median cell number from all datasets 

@@ -7,6 +7,8 @@
 # OBTAIN LATEST ANNOTATIONS  
 #-------------------------------------------------------------------------------
 
+library(AnnotationHub)
+
 # Gene annotations for  QC metrics -----
 
 # Connect to AnnotationHub (ah) and get the query search for the organisms of interest
