@@ -35,8 +35,8 @@ PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.
 # Calculate the performance metrics ----
 
 # List of methods
-methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "valiDrops", 
-             "all", "mito_ribo", "mito", "malat1", "mito.isolated.")
+methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater",  "valiDrops", 
+             "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
 
 # Input structure
 input_list <- list(
@@ -112,6 +112,10 @@ calc_pr_auc_ci <- function(scores, labels, n_bootstraps = 1000) {
   return(c(auc_mean, auc_lower, auc_upper))
 }
 
+
+# Initialize a list to store PR-AUC curve data
+pr_auc_curves <- list()
+
 # Calculate precision, FNR, and PR-AUC for each strategy for each dataset
 for (item in input_list) {
   
@@ -123,6 +127,9 @@ for (item in input_list) {
   
   # Loop through each method
   for (method in methods) {
+    
+    cat("\n")
+    message(method, " ...")
     
     df$method_outcome <- "na"
     
@@ -165,6 +172,26 @@ for (item in input_list) {
                                 fnr_lower = fnr_ci[2], fnr_upper = fnr_ci[3],
                                 pr_auc_lower = pr_auc_ci[2], pr_auc_upper = pr_auc_ci[3],
                                 stringsAsFactors = FALSE))
+    
+    
+    
+    # Calculate PR-AUC curve
+    if (method == "DropletQC") { next } else {
+      
+      scores <- c(rep(1, TP_count), rep(0, FN_count), rep(1, FP_count), rep(0, TN_count))
+      labels <- c(rep(1, TP_count + FN_count), rep(0, FP_count + TN_count))
+      pr <- pr.curve(scores.class0 = scores, weights.class0 = labels, curve = TRUE)
+      
+      # Store the curve data
+      pr_auc_curves[[paste0(dataset_name, "_", method)]] <- data.frame(
+        recall = pr$curve[, 1],
+        precision = pr$curve[, 2],
+        method = method,
+        dataset = dataset_name
+      )
+    
+    }
+    
   }
 }
 
@@ -240,22 +267,29 @@ ranked_results <- ranked_results %>%
     pr_auc_rank = rank(-pr_auc, ties.method = "first")
   )
 
-# Colour palette
+# Define the colors
 strategy_colours <- c(
   "ddqc" = "#A799C9",
   "DropletQC" = "#E7E4F6",
   "ensembleKQC" = "#808C98", 
   "miQC" = "#CED5DB", 
-  "valiDrops" = "#88A1BD",
-  "all" = "#D3E2F6",
-  "mito.isolated." = "#A6BEAE", 
-  "mito" = "#DCECE2", 
-  "mito_ribo" = "#9DBD78",
-  "malat1" = "#D7E7BE"
+  "scater" = "#88A1BD", 
+  "valiDrops" = "#D3E2F6",
+  "manual_all" = "#4F618F",
+  "manual_mito_isolated" = "#A6BEAE", 
+  "manual_mito" = "#DCECE2", 
+  "manual_mito_ribo" = "#9DBD78",
+  "manual_malat1" = "#D7E7BE"
+)
+
+# Define the order of strategies
+strategy_order <- c(
+  "ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
 )
 
 # Convert the strategy column to a factor with the specified order
-ranked_results$strategy <- factor(ranked_results$strategy, levels = methods)
+ranked_results$strategy <- factor(ranked_results$strategy, levels = strategy_order )
 
 # Define the common theme function
 rank_theme <- function() {
@@ -305,7 +339,7 @@ results <- read.csv(file = "/home/alicen/Projects/ReviewArticle/benchmark_result
 
 
 # Convert the strategy column to a factor with the specified order
-results$strategy <- factor(results$strategy, levels = methods)
+results$strategy <- factor(results$strategy, levels = strategy_order)
 
 # Pivot the data frame to long format
 df_long <- results %>%
@@ -334,19 +368,19 @@ performance_bar_theme <- function() {
       legend.text = element_text(size = 16),
       legend.position = "none",
       legend.justification = "center",
-      axis.text = element_text(size = 16),
-      axis.text.x = element_blank(),
-      axis.ticks.x = element_blank(),
-      axis.title = element_blank(),
+      axis.text = element_text(size = 18),
+      axis.text.y = element_blank(),
       axis.ticks.y = element_blank(),
-      axis.line.x = element_line(color = "black"),
-      axis.line.y = element_blank(),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(),
-      panel.grid.major.y = element_blank(),
-      panel.grid.minor.y = element_blank(),
+      axis.title.y = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.line.y = element_line(color = "black"),
+      axis.line.x = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
       panel.spacing = unit(1.5, "lines"),
       panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.8),
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.background = element_rect(fill = "white", color = NA),
       plot.title = element_text(vjust = 3.8, face = "bold", size = 16),
       strip.background = element_rect(fill = "white"),
       strip.text = element_text(color = "black", size = 12, face = "bold"),
@@ -357,36 +391,140 @@ performance_bar_theme <- function() {
 # Precision plot 
 precision_plot <- ggplot(df_long %>% dplyr::filter(measure == "precision"), aes(x = strategy, y = value, fill = strategy)) +
   geom_bar(stat = "identity") +
+  coord_flip() +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
   scale_fill_manual(values = strategy_colours) +
-  labs(title = "a     Precision", y = "Precision") + 
-  performance_bar_theme() + theme(plot.title = element_text(hjust = -0.05))
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
+  labs(title = "", y = "") + 
+  performance_bar_theme() + 
+  theme(plot.title = element_text(hjust = -0.05),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(vjust = -1.5),
+        strip.text = element_blank(), 
+        strip.background = element_blank())
+
+ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/precision.png",
+       plot = precision_plot,
+       width = 17, height = 6.4, units = "in")
 
 # FNR plot
 fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy, y = value, fill = strategy)) +
   geom_bar(stat = "identity") +
+  coord_flip() +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
   scale_fill_manual(values = strategy_colours) +
-  labs(title = "b     False Negative Rate (FNR)", y = "FNR") + 
-  performance_bar_theme() + theme(plot.title = element_text(hjust = -0.052))
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
+  labs(title = "", y = "") + 
+  performance_bar_theme() + 
+  theme(plot.title = element_text(hjust = -0.05),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(vjust = -1.5),
+        strip.text = element_blank(), 
+        strip.background = element_blank())
+
+ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/false_negative_rate.png",
+       plot = fnr_plot,
+       width = 17, height = 6.4, units = "in")
 
 # PR-AUC plot
 pr_auc_plot <- ggplot(df_long %>% dplyr::filter(measure == "pr_auc"), aes(x = strategy, y = value, fill = strategy)) +
   geom_bar(stat = "identity") +
+  coord_flip() +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
   scale_fill_manual(values = strategy_colours) +
-  scale_y_continuous(limits = c(0, 1), labels = scales::number_format(accuracy = 0.01)) +
-  labs(title = "c     Precision-Recall Area Under the Curve (PR-AUC)", y = "Precision") + 
-  performance_bar_theme() +
-  theme(
-    legend.position = "bottom",
-    legend.justification = "left",
-    plot.title = element_text(hjust = -0.075),
-    plot.margin = margin(10, 10, 20, 10)  # Adjust margin for this specific plot
-  )
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
+  labs(title = "", y = "") + 
+  performance_bar_theme() + 
+  theme(plot.title = element_text(hjust = -0.05),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(vjust = -1.5),
+        strip.text = element_blank(), 
+        strip.background = element_blank())
+
+ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/precision_recall_AUC.png",
+       plot = pr_auc_plot,
+       width = 17, height = 6.4, units = "in")
+
+#  PR-AUC curve plot ----
+
+create_pr_auc_plot <- function(dataset, data, strategy_colours) {
+  p <- ggplot(data %>% filter(dataset == dataset), aes(x = recall, y = precision, color = method)) +
+    geom_line(size = 1) +
+    scale_color_manual(values = strategy_colours) +
+    labs(title = paste("PR-AUC Curve for", dataset),
+         x = "Recall",
+         y = "Precision") +
+    theme_classic() +
+    theme(
+      legend.position = "right",
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.background = element_rect(fill = "white", color = NA)
+    )
+  
+  return(p)
+}
+
+# Rename list items 
+datasets <- c("apoptotic", "proapoptotic", "GM18507_dead", "GM18507_dying", "PDX")
+
+# Initialize a new list to store combined dataframes for each dataset
+combined_pr_auc_curves <- list()
+
+# Combine items of the same dataset together
+for (dataset in datasets) {
+  # Filter items that belong to the current dataset
+  dataset_items <- pr_auc_curves[grep(paste0("^", dataset, "_"), names(pr_auc_curves))]
+  
+  # Combine the items into a single dataframe
+  combined_pr_auc_curves[[dataset]] <- do.call(rbind, dataset_items)
+}
+
+# Find the positive prevalence for each dataset 
+positive_prevalence <- list()
+
+positive_prevalence$apoptotic <- table(apoptotic$orig.ident)[1] / (table(apoptotic$orig.ident)[1] + table(apoptotic$orig.ident)[2])
+positive_prevalence$proapoptotic <- table(pro_apoptotic$orig.ident)[2] / (table(pro_apoptotic$orig.ident)[1] + table(pro_apoptotic$orig.ident)[2])
+positive_prevalence$GM18507_dead <- table(GM18507_dead$orig.ident)[2] / (table(GM18507_dead$orig.ident)[2] + table(GM18507_dead$orig.ident)[1])
+positive_prevalence$GM18507_dying <- table(GM18507_dying$orig.ident)[2] / (table(GM18507_dying$orig.ident)[2] + table(GM18507_dying$orig.ident)[1])
+positive_prevalence$PDX <- table(PDX$orig.ident)[2] / (table(PDX$orig.ident)[2] + table(PDX$orig.ident)[1])
+
+
+# Plot the curves 
+plots <- list()
+for (dataset in names(combined_pr_auc_curves)) {
+  p <- ggplot(combined_pr_auc_curves[[dataset]], aes(x = recall, y = precision, color = method)) +
+    geom_line(size = 2) +
+    geom_hline(yintercept = positive_prevalence[[dataset]], linetype = "dashed", color = "black") +
+    scale_x_continuous(labels = scales::number_format(accuracy = 0.1)) +  
+    scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) +
+    scale_color_manual(values = strategy_colours) +
+    labs(title = "",
+         x = "Recall",
+         y = "Precision") +
+    theme_classic() +
+    theme(legend.position = "none",
+          axis.title = element_blank(),
+          axis.ticks = element_blank(),
+          axis.text.y = element_text(size = 16, hjust = -0.5),
+          axis.text.x = element_text(size = 16, vjust = -0.5),
+          panel.border = element_rect(fill = NA, color = "black"),
+          panel.background = element_rect(fill = "white", color = NA),
+          plot.background = element_rect(fill = "white", color = NA))
+  
+  plots[[dataset]] <- p
+}
+
+# Name the plots
+names(plots) <- names(combined_pr_auc_curves)
+
+PRAUC_plots <- plots$apoptotic | plots$GM18507_dead | plots$GM18507_dying | plots$PDX | plots$proapoptotic
+
+ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/PRAUC_curves.png",
+       plot = PRAUC_plots,
+       width = 15, height = 5.3, units = "in")
 
 #-------------------------------------------------------------------------------
 # COMBINE PLOTS 
@@ -404,4 +542,7 @@ ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_resul
 ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/barplots_ranked.svg"), 
        plot = final_plot, width = 20, height = 13, dpi = 300)
 
+
+
+### End
 

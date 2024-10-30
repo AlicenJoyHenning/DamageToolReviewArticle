@@ -537,7 +537,6 @@ calculate_f1 <- function(set_A, set_B) {
 # Psuedo-bulk DEGs between cell type in control and stimulated case (5 cell types)
 # Compute the F1 score for each set of cell-type specific DEGs 
 
-
 # Calculate control DEGs ----
 
 # In a cell-type specific manner, find the DEGs for each damage case (2.5, 5, 10, 15, 20)
@@ -726,7 +725,18 @@ uf_damaged_10 <- compare_deg_sets(damage_percent = "10")   # 0.9643
 uf_damaged_15 <- compare_deg_sets(damage_percent = "15")   # 0.9457
 uf_damaged_20 <- compare_deg_sets(damage_percent = "20")   # 0.9250
 
+negative_controls <- data.frame(uf_damaged_2.5 = uf_damaged_2.5, 
+                                uf_damaged_5 = uf_damaged_5, 
+                                uf_damaged_10 = uf_damaged_10, 
+                                uf_damaged_15 = uf_damaged_15, 
+                                uf_damaged_20 = uf_damaged_20
+                                )
 
+write.csv(negative_controls , 
+          "/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/DEG_negative_controls.csv",
+          quote = FALSE, 
+          row.names = FALSE
+)
 
 # Calculate DEGs of the test cases and compare to parent ----
 
@@ -887,7 +897,7 @@ write.csv(combined_deg_medians, "/home/alicen/Projects/ReviewArticle/damage_pert
 
 
 
-
+### End 
 
 
 
