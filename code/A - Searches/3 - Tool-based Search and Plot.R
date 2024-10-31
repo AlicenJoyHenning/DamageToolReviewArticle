@@ -2,33 +2,18 @@
 
 # Load packages -----
 
-# install.packages("Diderot")
-# library(Diderot) # Some problem with SSL certificate verification
-# ?Diderot # colours in vignette!! So cool!
-# ?get_date_from_doi()
-
-
 install.packages("rcrossref")
 library(rcrossref)          
 library(dplyr)
-
-install.packages("ggplot2")
 library(ggplot2)
-
-install.packages("ggrepel")
 library(ggrepel)
-
-install.packages("patchwork")
 library(patchwork)
-
-install.packages("cowplot")
 library(cowplot)
 
 # Prepare for visualisations -----
 
 # Read in the data frame downloaded from https://www.scrna-tools.org/table
-scRNAseqtools_df <- read.csv2("C:/Users/alice/OneDrive/Documents/University/Masters/limiric_article/scRNAseq-tools-dates.csv",
-                              sep = ",")
+scRNAseqtools_df <- read.csv("/home/alicen/Projects/ReviewArticle/article_search/scRNA-tools-dates.csv")
 
 # For those tools with no publications, add 0 
 scRNAseqtools_df$Citations <- ifelse(scRNAseqtools_df$Citations == "'-", 0, scRNAseqtools_df$Citations)
@@ -61,7 +46,6 @@ scRNAseqtools_df$First_Pub_Date[is.na(scRNAseqtools_df$First_Pub_Date)] <- "unkn
 # Remove tools with no citations and no DOI 
 scRNAseqtools_df$DOIs[is.na(scRNAseqtools_df$DOIs) | scRNAseqtools_df$DOIs == ""] <- "unknown"
 scRNAseqtools_df <- subset(scRNAseqtools_df, scRNAseqtools_df$DOIs != "unknown")
-
 
 
 # Manually add unknown dates -----
@@ -108,7 +92,6 @@ extract_date <- function(doi) {
 
 # Apply the function to each entry in the DOIs column and create a new Date column
 unknown_dates$Date <- sapply(unknown_dates$DOIs, extract_date)
-
 unknown_dates <- subset(unknown_dates, unknown_dates$Date != "unknown")
 unknown_dates$First_Pub_Date <- unknown_dates$Date
 
@@ -130,7 +113,6 @@ scRNAseqtools_dff$Date <- merged_df$Final_Date
 scRNAseqtools_dff$DOI <- merged_df$DOIs.x
 scRNAseqtools_dff$Citations <- merged_df$Citations.x
 scRNAseqtools_dff$Categories <- merged_df$Categories.x
-
 
 
 # Convert list columns to character columns
@@ -156,6 +138,7 @@ scRNAseqtools_dff$X <- NULL
 scRNAseqtools_dff$Date <- ifelse(grepl("^\\d{4}-\\d{2}$", scRNAseqtools_dff$Date), 
                                  paste0(scRNAseqtools_dff$Date, "-01"), 
                                  scRNAseqtools_dff$Date)
+
 
 # Mark categories as either QC related, QC unrelated, QC focus ------
 
