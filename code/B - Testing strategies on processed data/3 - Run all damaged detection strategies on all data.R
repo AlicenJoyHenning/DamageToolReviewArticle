@@ -10,8 +10,9 @@
 # 2. ensembleKQC (loading results)
 # 3. DropletQC : package functions 
 # 4. miQC : select best model
-# 5. valiDrops : modified function 
-# + scater PCA 
+# 5. Scater : PCA
+# 6. valiDrops : modified function 
+# 7. SampleQC (separately) 
 #
 # NB: 
 # - Output from ddqc and ensembleKQC must be done
@@ -28,9 +29,9 @@
 
 # Load libraries -------
 
-packages <- c("cowplot", "devtools", "dplyr", "ggplot2", "glmGamPoi", "Matrix", "robustbase",
+packages <- c("BiocStyle", "cowplot", "devtools", "dplyr", "ggplot2", "glmGamPoi", "Matrix", "robustbase",
               "png", "Seurat", "tidyr", 
-              "limiric", "miQC", "SingleCellExperiment", "scater",
+              "miQC", "SampleQC",  "SingleCellExperiment", "scater",
               "scuttle", "SummarizedExperiment", "presto", "valiDrops", "DropletQC")
 
 for (pkg in packages) {
@@ -116,7 +117,7 @@ benchmark <- function(
   message("Tool 2: EnsembleKQC ...")
   
   # Read in output and add to Seurat meta data 
-  ensembleKQC_results <- read.csv2(ensembleKQC_path, sep = ',', col.names = "EnsembleKQC")
+  ensembleKQC_results <- suppressWarnings(read.csv2(ensembleKQC_path, sep = ',', col.names = "EnsembleKQC"))
   seurat$ensembleKQC <- ensembleKQC_results$EnsembleKQC[match(rownames(ensembleKQC_results), rownames(seurat@meta.data))]
   seurat$ensembleKQC <- ifelse(is.na(seurat$ensembleKQC), "cell", seurat$ensembleKQC)
   
@@ -420,6 +421,9 @@ benchmark <- function(
             quote = FALSE, 
             row.names = TRUE) 
   
+  saveRDS(seurat, 
+          paste0(output_path, "/", project_name, "_backup.csv"))
+  
   
   # Plot the output -------
   
@@ -434,6 +438,7 @@ benchmark <- function(
   return(seurat)
   
 }
+
 
 #-------------------------------------------------------------------------------
 # FUNCTION RUN 
@@ -527,7 +532,7 @@ mLung <- benchmark(seurat = mLung,
                    output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
 
 mPBMC <- benchmark(seurat = mPBMC,
-                   project_name = " PBMC",
+                   project_name = "mPBMC",
                    # model_method = "linear",
                    organism = "Mmus",
                    ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/mPBMC.csv",
@@ -582,8 +587,8 @@ HEK293_apo <-  benchmark(seurat = HEK293_apo ,
   
 HEK293_pro <-  benchmark(seurat = HEK293_pro, 
                          project_name = "HEK293_pro",
-                         model_method = "one-dimensional",
-                         ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/HEK293_pro.csv", 
+                         #model_method = "one-dimensional",
+                         ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/HEK293_apo.csv", 
                          ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/HEK293pro.csv",
                          output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
 
@@ -594,6 +599,135 @@ PDX_dead <- benchmark(seurat = PDX_dead,
                       ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/PDX_dead.csv", 
                       ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/PDX.csv",
                       output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+
+#-------------------------------------------------------------------------------
+# SampleQC 
+#-------------------------------------------------------------------------------
+
+# Saving function ----
+
+save_sampleQC <- function(seurat, 
+                          project_name, 
+                          organism, 
+                          output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results/"){
+  
+  # Save meta data 
+  write.csv(seurat@meta.data, 
+            paste0(output_path, "/", project_name, ".csv"), 
+            quote = FALSE, 
+            row.names = TRUE) 
+  
+  # Save summarised results 
+  final_df <- summarise_results(seurat = seurat,
+                                methods = list("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater", "valiDrops", 
+                                     "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated"))
+  
+  write.csv(final_df, 
+            paste0(output_path, "/", project_name, "_summary.csv"), 
+            quote = FALSE, 
+            row.names = FALSE) 
+  
+  # Generate plot 
+  plot <- BenchPlot(seurat, 
+                    methods = c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops", 
+                                "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated"),
+                    output_file = paste0(output_path, "/", project_name, ".png"), 
+                    organism)
+
+}  
+  
+  
+# SampleQC for each collection of samples -----
+
+# Create a single object for each group 
+groundtruth <- merge(x = GM18507_dead,
+                     y = c(GM18507_dying, HEK293_apo, HEK293_pro, PDX_dead),
+                     add.cell.ids = c("GM18507_dead", "GM18507_dying", "HEK293_apo", "HEK293_pro", "PDX_dead"),
+                     project = "Groundtruth"
+)
+
+non_groundtruth <- merge(x = A549,
+                         y = c(HCT116, Jurkat, hLiver, hPBMC, hLung,
+                         dLiver, dPBMC, dLung, mLiver, mPBMC, mLung,
+                         ductal, hodgkin, glio),
+                         add.cell.ids = c("A549", "HCT116", "Jurkat", 
+                                          "hLiver", "hPBMC", "hLung",
+                                          "dLiver", "dPBMC", "dLung",
+                                          "mLiver", "mPBMC", "mLung",
+                                          "ductal", "hodgkin", "glio"),
+                         merge.data = TRUE,
+                         project = "non_groundtruth"
+)
+
+# Convert to correct column name for sampleQC to recognise
+groundtruth$percent.mt <- groundtruth$mt.percent
+non_groundtruth$percent.mt <- non_groundtruth$mt.percent
+
+
+# Create SampleQC dataframe using default function 
+qc_dt = make_qc_dt(non_groundtruth@meta.data, 
+                     sample_var  = 'orig.ident', 
+                     qc_names    = c('log_counts', 'log_feats', 'logit_mito'),
+                     annot_vars  = NULL
+)
+
+
+
+# which QC metrics do we want to use?
+qc_names    = c('log_counts', 'log_feats', 'logit_mito')
+annots_disc = 'orig.ident' # discrete variables 
+annots_cont = NULL # continuous variables 
+
+# Use dimensionality reduction to calculate distances between groups
+qc_obj    = calc_pairwise_mmds(qc_dt, 
+                               one_group_only = TRUE,
+                               qc_names, 
+                               annots_disc = annots_disc, 
+                               annots_cont = annots_cont, 
+                               n_cores = 4)# Fit each grouping 
+
+qc_obj = fit_sampleqc(qc_obj, K_list = rep(1, get_n_groups(qc_obj)))
+outliers_dt = get_outliers(qc_obj)
+
+# Transfer outlier label (TRUE -> "damaged", FALSE -> "cell")
+non_groundtruth$SampleQC <- outliers_dt$outlier
+non_groundtruth$SampleQC <- ifelse(non_groundtruth$SampleQC == "TRUE", "damaged", "cell")
+
+
+# Saving ----
+
+for (dataset in unique(non_groundtruth$orig.ident)){
+  
+  # Extract and save mouse samples 
+  if (dataset %in% c("mPBMC", "mLiver", "mLung")){
+    
+    seurat <- subset(non_groundtruth, orig.ident == dataset)
+    save_sampleQC(seurat, as.character(dataset), organism = "Mmus")
+    
+  } else {
+    
+    # Extract and save human samples 
+    seurat <- subset(non_groundtruth, orig.ident == dataset)
+    save_sampleQC(seurat, as.character(dataset), organism = "Hsap")
+    
+  }
+  
+}
+  
+
+
+# Split up the joined object and save meta data 
+GM18507_dead <- subset(groundtruth, orig.ident %in% c("GM18507_dead", "GM18507_control"))
+GM18507_dying <- subset(groundtruth, orig.ident %in% c("GM18507_dying", "GM18507_control"))
+HEK293_apoptotic <- subset(groundtruth, orig.ident %in% c("HEK293_apoptotic", "HEK293_control"))
+HEK293_proapoptotic <- subset(groundtruth, orig.ident %in% c("HEK293_proapoptotic", "HEK293_control"))
+PDX_dead <- subset(groundtruth, orig.ident %in% c("PDX_dead", "PDX_control"))
+
+save_sampleQC(GM18507_dead, "GM18507_dead", organism = "Hsap")
+save_sampleQC(GM18507_dying, "GM18507_dying", organism = "Hsap")
+save_sampleQC(HEK293_apoptotic, "HEK293_apoptotic", organism = "Hsap")
+save_sampleQC(HEK293_proapoptotic, "HEK293_proapoptotic", organism = "Hsap")
+save_sampleQC(PDX_dead, "PDX_dead", organism = "Hsap")
 
 
 ### End 

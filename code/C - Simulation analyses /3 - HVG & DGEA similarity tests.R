@@ -390,7 +390,7 @@ compare_sets <- function(test,             # seurat of the damaged case of inter
                        stringsAsFactors = FALSE)
   
   # Define each damaged detection method (as exists in column of Seurat meta data)
-  methods <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  methods <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
                 "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
 
   for (method in methods) {
@@ -778,7 +778,7 @@ compare_deg_sets <- function(damage_percent,  # Case of interest (2.5, 5, 10, 15
                        stringsAsFactors = FALSE)
   
   # Define each damaged detection method (as exists in column of Seurat meta data)
-  methods <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  methods <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
                 "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
   
   # method = "manual_all"

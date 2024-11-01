@@ -172,10 +172,10 @@ BenchPlot <- function(seurat,
   })
   
   # Combine plots ------
-  combined_plot1 <- plot_grid(plotlist = plots1, ncol = 11, rel_heights = c(1, 1))
-  combined_plot2 <- plot_grid(plotlist = plots2, ncol = 11, rel_heights = c(1, 1))
-  combined_plot3 <- plot_grid(plotlist = plots3, ncol = 11, rel_heights = c(1, 1))
-  combined_plot4 <- plot_grid(plotlist = plots4, ncol = 11, rel_heights = c(1, 1))
+  combined_plot1 <- plot_grid(plotlist = plots1, ncol = length(methods), rel_heights = c(1, 1))
+  combined_plot2 <- plot_grid(plotlist = plots2, ncol = length(methods), rel_heights = c(1, 1))
+  combined_plot3 <- plot_grid(plotlist = plots3, ncol = length(methods), rel_heights = c(1, 1))
+  combined_plot4 <- plot_grid(plotlist = plots4, ncol = length(methods), rel_heights = c(1, 1))
   
   combined_plot <- plot_grid(
     combined_plot1, combined_plot2, combined_plot3, combined_plot4,
@@ -189,7 +189,7 @@ BenchPlot <- function(seurat,
     )
   
   # Save the plot
-  ggsave(output_file, combined_plot, width = 38, height = 14, units = "in", dpi = 300, limitsize = FALSE)
+  ggsave(output_file, combined_plot, width = 40, height = 14, units = "in", dpi = 300, limitsize = FALSE)
   
   return(combined_plot)
   

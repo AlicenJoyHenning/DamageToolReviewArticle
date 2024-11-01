@@ -81,10 +81,11 @@ View(simulated$control_sim_1_2.5)
 
 # Define the colors
 strategy_colours <- c(
-  "ddqc" = "#A799C9",
-  "DropletQC" = "#E7E4F6",
-  "ensembleKQC" = "#808C98", 
-  "miQC" = "#CED5DB", 
+  "ddqc" = "#CE9DBA",
+  "DropletQC" = "#A799C9",
+  "ensembleKQC" = "#E7E4F6", 
+  "miQC" = "#808C98", 
+  "SampleQC" = "#CED5DB",
   "scater" = "#88A1BD", 
   "valiDrops" = "#D3E2F6",
   "manual_all" = "#4F618F",
@@ -96,7 +97,7 @@ strategy_colours <- c(
 
 
 # Define the desired order
-desired_order <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+desired_order <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
                     "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
 )
 
@@ -138,7 +139,7 @@ barplot_theme <- function() {
 
 find_proportion_damaged <- function(data, project_name){
   
-  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
                    "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")]
   
   # Calculate damaged proportion for each column
@@ -324,7 +325,7 @@ proportion_damaged_simulated_plot | proportion_damaged_non_groundtruth_plot | pr
 find_proportion_unique <- function(data, project_name, groundtruth = NULL) {
   
   # Define tools and columns of interest for the data frame 
-  tools <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops", 
+  tools <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater", "valiDrops", 
              "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
   
   columns <- c("orig.ident", tools)
@@ -596,7 +597,7 @@ ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_resul
 calculate_similarity <- function(data){
   
   # Isolate columns of interest 
-  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater", "valiDrops",
                    "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")]
   
   # Convert damaged/cell labels to binary 1/0
@@ -624,7 +625,7 @@ calculate_similarity <- function(data){
   kappa_matrix[is.nan(kappa_matrix)] <- 0
   
   # Name the rows & columns 
-  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
   "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
 
   rownames(kappa_matrix) <- colnames(kappa_matrix) <- tool_names
@@ -714,7 +715,7 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
   
   # Add the tool names -----
   similarity_matrix <- matrix
-  rownames(similarity_matrix) <- colnames(similarity_matrix) <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  rownames(similarity_matrix) <- colnames(similarity_matrix) <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
   "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
   
   # Add a small constant to the diagonal elements to avoid zero variance issues
@@ -789,7 +790,7 @@ ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_resul
 calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
   
   
-  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops", 
+  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops", 
                   "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
 
     # Initialize an empty data frame to store the standard deviation of Kappa scores for each tool

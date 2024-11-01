@@ -35,7 +35,7 @@ PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.
 # Calculate the performance metrics ----
 
 # List of methods
-methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater",  "valiDrops", 
+methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
              "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
 
 # Input structure
@@ -269,10 +269,11 @@ ranked_results <- ranked_results %>%
 
 # Define the colors
 strategy_colours <- c(
-  "ddqc" = "#A799C9",
-  "DropletQC" = "#E7E4F6",
-  "ensembleKQC" = "#808C98", 
-  "miQC" = "#CED5DB", 
+  "ddqc" = "#CE9DBA",
+  "DropletQC" = "#A799C9",
+  "ensembleKQC" = "#E7E4F6", 
+  "miQC" = "#808C98", 
+  "SampleQC" = "#CED5DB",
   "scater" = "#88A1BD", 
   "valiDrops" = "#D3E2F6",
   "manual_all" = "#4F618F",
@@ -284,7 +285,7 @@ strategy_colours <- c(
 
 # Define the order of strategies
 strategy_order <- c(
-  "ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops",
+  "ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
   "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
 )
 
