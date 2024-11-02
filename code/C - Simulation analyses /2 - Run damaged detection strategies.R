@@ -33,7 +33,7 @@
 # Load libraries -------
 
 packages <- c("cowplot", "devtools", "dplyr", "ggplot2", "glmGamPoi", "Matrix", "robustbase",
-              "png", "Seurat", "tidyr", 
+              "png", "Seurat", "tidyr", "scater", "SampleQC",
               "limiric", "miQC", "SingleCellExperiment",
               "scuttle", "presto", "valiDrops", "DropletQC")
 
@@ -137,22 +137,37 @@ simulated_merged <- merge(x = simulated$control_sim_1_2.5,
                      project = "Simulated"
 )
 
-# Convert to correct column name for sampleQC to recognise
+# Convert to correct column name for SampleQC to recognise
 simulated_merged$percent.mt <- simulated_merged$mt.percent
+
+# Convert rownames to a dataframe
+df <- data.frame(column_name = rownames(simulated_merged@meta.data))
+
+# Function to extract the desired part of the string
+extract_first_half <- function(s) {
+  parts <- unlist(strsplit(s, "_"))
+  paste(parts[1:4], collapse = "_")
+}
+
+# Apply the function to the dataframe column
+df <- df %>%
+  mutate(extracted = sapply(column_name, extract_first_half))
+
+# Assign the extracted column back to the original dataframe
+simulated_merged$dataset <- df$extracted
 
 
 # Create SampleQC dataframe using default function 
 qc_dt = make_qc_dt(simulated_merged@meta.data, 
-                   sample_var  = 'orig.ident', 
+                   sample_var  = 'dataset', 
                    qc_names    = c('log_counts', 'log_feats', 'logit_mito'),
                    annot_vars  = NULL
 )
 
 
-
 # which QC metrics do we want to use?
 qc_names    = c('log_counts', 'log_feats', 'logit_mito')
-annots_disc = 'orig.ident' # discrete variables 
+annots_disc = 'dataset' # discrete variables 
 annots_cont = NULL # continuous variables 
 
 # Use dimensionality reduction to calculate distances between groups
@@ -169,15 +184,31 @@ outliers_dt = get_outliers(qc_obj)
 # Transfer outlier label (TRUE -> "damaged", FALSE -> "cell")
 simulated_merged$SampleQC <- outliers_dt$outlier
 simulated_merged$SampleQC <- ifelse(simulated_merged$SampleQC == "TRUE", "damaged", "cell")
+table(simulated_merged$SampleQC)
+
 
 
 # Saving ----
 
-for (dataset in names(simulated_merged)){
-    
-    # Extract and save human samples 
-    seurat <- subset(non_groundtruth, orig.ident == dataset)
-    save_sampleQC(seurat, as.character(dataset), organism = "Hsap")
+samples <- c("control_sim_1_2.5", "control_sim_1_5", "control_sim_1_10", "control_sim_1_15", "control_sim_1_20",    
+             "control_sim_2_2.5", "control_sim_2_5", "control_sim_2_10", "control_sim_2_15", "control_sim_2_20",    
+             "control_sim_3_2.5", "control_sim_3_5", "control_sim_3_10", "control_sim_3_15", "control_sim_3_20",    
+             "stimulated_sim_1_2.5", "stimulated_sim_1_5", "stimulated_sim_1_10", "stimulated_sim_1_15", "stimulated_sim_1_20", 
+             "stimulated_sim_2_2.5", "stimulated_sim_2_5", "stimulated_sim_2_10", "stimulated_sim_2_15", "stimulated_sim_2_20", 
+             "stimulated_sim_3_2.5", "stimulated_sim_3_5", "stimulated_sim_3_10", "stimulated_sim_3_15", "stimulated_sim_3_20" )
+
+simulated_subsets <- list()
+
+for (sample in samples) {
+  
+  # Extract sample
+  simulated_subsets[[sample]] <- subset(simulated_merged, subset = dataset == sample)
+  
+  # Run summarise and plotting functions 
+  save_sampleQC(seurat = simulated_subsets[[sample]], 
+                project_name = sample, 
+                organism = "Hsap", 
+                output_path = "/home/alicen/Projects/ReviewArticle/damage_perturbation/benchmark_results/")
 
 }
 

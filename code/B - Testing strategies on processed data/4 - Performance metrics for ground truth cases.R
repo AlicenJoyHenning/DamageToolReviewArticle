@@ -15,15 +15,17 @@
 #-------------------------------------------------------------------------------
 
 # Load necessary libraries
-library(ggplot2)
-library(dplyr)
-library(tidyr)
-library(PRROC)
-library(patchwork)  # For arranging plots
+packages <- c("dplyr", "ggplot2", "tidyr", "PRROC", "patchwork")
+
+for (pkg in packages) {
+  if (!require(pkg, character.only = TRUE)) {
+    library(pkg)
+  }
+}
 
 # Load datasets (5 cases)
-apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_apo.csv")
-pro_apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_pro.csv")
+apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_apoptotic.csv")
+pro_apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_proapoptotic.csv")
 GM18507_dead <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dead.csv")
 GM18507_dying <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dying.csv")
 PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.csv")
@@ -407,7 +409,7 @@ precision_plot <- ggplot(df_long %>% dplyr::filter(measure == "precision"), aes(
 
 ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/precision.png",
        plot = precision_plot,
-       width = 17, height = 6.4, units = "in")
+       width = 17, height = 6.7, units = "in")
 
 # FNR plot
 fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy, y = value, fill = strategy)) +
@@ -427,7 +429,7 @@ fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy
 
 ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/false_negative_rate.png",
        plot = fnr_plot,
-       width = 17, height = 6.4, units = "in")
+       width = 17, height = 6.7, units = "in")
 
 # PR-AUC plot
 pr_auc_plot <- ggplot(df_long %>% dplyr::filter(measure == "pr_auc"), aes(x = strategy, y = value, fill = strategy)) +
@@ -447,7 +449,7 @@ pr_auc_plot <- ggplot(df_long %>% dplyr::filter(measure == "pr_auc"), aes(x = st
 
 ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/precision_recall_AUC.png",
        plot = pr_auc_plot,
-       width = 17, height = 6.4, units = "in")
+       width = 17, height = 6.7, units = "in")
 
 #  PR-AUC curve plot ----
 

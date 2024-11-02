@@ -24,7 +24,7 @@ library(irr)
 
 # Load datasets  -----
 # Ground truth 
-apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_apo.csv")
+apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK2.csv")
 pro_apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_pro.csv")
 GM18507_dead <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dead.csv")
 GM18507_dying <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dying.csv")

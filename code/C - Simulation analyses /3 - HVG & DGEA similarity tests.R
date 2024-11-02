@@ -53,42 +53,6 @@ dim(stimulated_sim_1)[2] # 4279
 dim(stimulated_sim_2)[2] # 4967
 dim(stimulated_sim_3)[2] # 5463
 
-
-# Filter controls -----
-
-# Filter control cases to be more like reality, control = no damaged (small), damaged = added damage (larger), filtering = taking away from damage (reduction in damaged size, closer to control)
-
-filter_controls <- function(control, project_name){
-  
-  filtered_controls <- list()
-  
-  percentages <- c(2.5, 5, 10, 15, 20)
-  
-  for (percent in percentages){
-    
-    # Retrieve matching perturbed object
-    perturbed <- simulated[[paste0(project_name, "_", percent, "_seurat")]]
-    unperturbed_cells <- rownames(perturbed@meta.data)[perturbed$orig.ident == "cell"]
-    filtered <- subset(control, cells = unperturbed_cells) 
-    
-    # Add to list 
-    filtered_controls[[paste0(project_name, "_", percent)]] <- filtered
-                  
-  }
-
-  return(filtered_controls)
-  
-}
-
-control_sim_1 <- filter_controls(control_sim_1, "control_sim_1")
-control_sim_2 <- filter_controls(control_sim_2, "control_sim_2")
-control_sim_3 <- filter_controls(control_sim_3, "control_sim_3")
-stimulated_sim_1 <- filter_controls(stimulated_sim_1, "stimulated_sim_1")
-stimulated_sim_2 <- filter_controls(stimulated_sim_2, "stimulated_sim_2")
-stimulated_sim_3 <- filter_controls(stimulated_sim_3, "stimulated_sim_3")
-
-
-
 # Read in damaged-perturbed simulated datasets and labels using loop ----
 
 # Parent directories for the rds objects (housing count matrices)
@@ -118,7 +82,6 @@ for (condition in conditions) {
     }
   }
 }
-
 
 # Damaged strategy outputs (dfs)
 parent_directory_df <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/benchmark_results/"
@@ -154,7 +117,7 @@ for (condition in conditions) {
       # Construct the key for the simulated list
       seurat_key <- paste0(condition, "_", rep, "_", percentage, "_seurat")
       result_key <- paste0(condition, "_", rep, "_", percentage)
-    
+      
       # Transfer the data frame to the seurat object's meta.data
       simulated[[seurat_key]]@meta.data <- results[[result_key]]
       rownames(simulated[[seurat_key]]@meta.data) <- colnames(simulated[[seurat_key]]@assays$RNA$counts)
@@ -165,6 +128,41 @@ for (condition in conditions) {
 
 # Confirm
 # View(simulated$control_sim_1_2.5_seurat@meta.data)
+
+
+# Filter controls -----
+
+# Filter control cases to be more like reality, control = no damaged (small), damaged = added damage (larger), filtering = taking away from damage (reduction in damaged size, closer to control)
+
+filter_controls <- function(control, project_name){
+  
+  filtered_controls <- list()
+  
+  percentages <- c(2.5, 5, 10, 15, 20)
+  
+  for (percent in percentages){
+    
+    # Retrieve matching perturbed object
+    perturbed <- simulated[[paste0(project_name, "_", percent, "_seurat")]]
+    unperturbed_cells <- rownames(perturbed@meta.data)[perturbed$orig.ident == "cell"]
+    filtered <- subset(control, cells = unperturbed_cells) 
+    
+    # Add to list 
+    filtered_controls[[paste0(project_name, "_", percent)]] <- filtered
+                  
+  }
+
+  return(filtered_controls)
+  
+}
+
+control_sim_1 <- filter_controls(control_sim_1, "control_sim_1")
+control_sim_2 <- filter_controls(control_sim_2, "control_sim_2")
+control_sim_3 <- filter_controls(control_sim_3, "control_sim_3")
+stimulated_sim_1 <- filter_controls(stimulated_sim_1, "stimulated_sim_1")
+stimulated_sim_2 <- filter_controls(stimulated_sim_2, "stimulated_sim_2")
+stimulated_sim_3 <- filter_controls(stimulated_sim_3, "stimulated_sim_3")
+
 
 #-------------------------------------------------------------------------------
 # HVGs
@@ -242,15 +240,13 @@ seurat_objects <- list(
 # Calculate and store variable features (vf) for each parent dataset
 variable_features <- list()
 
-# Change back to 5000 genes 
 for (name in names(seurat_objects)) {
   seurat_objects[[name]] <- NormalizeData(seurat_objects[[name]]) %>% FindVariableFeatures(nfeatures = 5000)
   variable_features[[name]] <- VariableFeatures(seurat_objects[[name]])
 }
 
-# Compare control (parent) to damaged (unfiltered) -----
 
-# Create list of test (unfiltered) objects 
+# Compare control (parent) to damaged (unfiltered) -----
 
 # Define the control and stimulated simulations
 simulations <- c("control_sim_1", "control_sim_2", "control_sim_3", 
@@ -262,7 +258,6 @@ damage_percentages <- c("2.5", "5", "10", "15", "20")
 # Initialize an empty list to store the test cases
 test_list <- list()
 
-# Nested loops to generate the test cases
 for (sim in simulations) {
   for (damage_percent in damage_percentages) {
     project_name <- paste0(sim, "_", damage_percent)
@@ -277,7 +272,6 @@ for (sim in simulations) {
 # Convert the list to a format that matches the original structure
 test_list <- unname(test_list)
   
-
 compare_sets <- function(test,             # seurat of the damaged case of interest 
                          damaged_percent,  # 2.5, 5, 10, 15, or 20
                          project_name      # string to save this column as 
@@ -335,8 +329,8 @@ hvg_parent_v_unfiltered <- data.frame(case = character(),
                                       damage_unique = numeric(),
                                       stringsAsFactors = FALSE)
 
-HVGs <- list()
 
+HVGs <- list()
 for (item in test_list) {
   
   cat("\n")
@@ -379,12 +373,6 @@ compare_sets <- function(test,             # seurat of the damaged case of inter
   
   # Initialize empty df
   results = data.frame(method = character(),
-                       
-                       # Venn Diagram 
-                       control_unique = numeric(),
-                       damaged_unique = numeric(),
-                       intersection = numeric(), 
-                       
                        jaccard_index = numeric(),
                        propotion_damaged = numeric(),
                        stringsAsFactors = FALSE)
@@ -410,13 +398,6 @@ compare_sets <- function(test,             # seurat of the damaged case of inter
     # Retrieve parent vf 
     parent_vf <- variable_features[[paste0(project_name)]]
     
-    
-    # Calculate the overlap and unique genes to each set
-    intersection <- length(intersect(vf, parent_vf))
-    damage_unique <- length(vf) - intersection
-    control_unique <- length(parent_vf) - intersection 
-    
-    
     # Calculate the similarity (sm) of this vf set to that of the specified parent 
     sm <- calculate_jaccard(vf, parent_vf)
       
@@ -424,9 +405,6 @@ compare_sets <- function(test,             # seurat of the damaged case of inter
     new_row <- data.frame(method = method, stringsAsFactors = FALSE)
     new_row[[project_name]] <- sm  
     new_row[[paste0(project_name, "_", "proportion")]] <- proportion_damaged
-    new_row[[paste0(project_name, "_", "intersection")]] <- intersection
-    new_row[[paste0(project_name, "_", "control_unique")]] <- control_unique
-    new_row[[paste0(project_name, "_", "damage_unique")]] <- damage_unique
     
     # Append the new row to results
     results <- rbind(results, new_row)
@@ -473,8 +451,8 @@ run_compare_sets <- function(damage_percentage) {
     merge(stimulated_sim_3_sm, by = "method", all = TRUE)
   
 
-  # Identify columns that do not end in _damaged
-  columns_to_median <- grep(".*_damaged$", colnames(median_sim), invert = TRUE, value = TRUE)
+  # Identify columns specific to the similarity index value
+  columns_to_median <- grep(".*_proportion$", colnames(median_sim), invert = TRUE, value = TRUE)
   columns_to_median <- columns_to_median[columns_to_median != "method"]
   
   # Calculate the median for these columns only
@@ -482,10 +460,19 @@ run_compare_sets <- function(damage_percentage) {
   median_sim[[median_col_name]] <- apply(median_sim[, columns_to_median], 1, median, na.rm = TRUE)
   
   # Identify columns that end in _damaged
-  columns_damaged <- grep(".*_damaged$", colnames(median_sim), value = TRUE)
+  columns_damaged <- grep(".*_proportion$", colnames(median_sim), value = TRUE)
   
   # Calculate the median for the _damaged columns
   median_sim[["median_proportion"]] <- apply(median_sim[, columns_damaged], 1, median, na.rm = TRUE)
+  
+  # Calculate the lowest and highest values for columns not ending in "_proportion"
+  lowest_col_name <- paste0("lowest_", damage_percentage)
+  highest_col_name <- paste0("highest_", damage_percentage)
+  
+  # Add columns for the lowest and highest values (for plotting intervals)
+  median_sim[[lowest_col_name]] <- apply(median_sim[, columns_to_median], 1, min, na.rm = TRUE)
+  median_sim[[highest_col_name]] <- apply(median_sim[, columns_to_median], 1, max, na.rm = TRUE)
+  
   
   return(median_sim)
   
@@ -500,11 +487,13 @@ median_sim_20 <- run_compare_sets("20")
 
 # Merge median values for plotting 
 combined_medians <- median_sim_2.5 %>%
-  dplyr::select(method, median_2.5, median_proportion) %>%
-  full_join(median_sim_5 %>% dplyr::select(method, median_5, median_proportion), by = "method") %>%
-  full_join(median_sim_10 %>% dplyr::select(method, median_10, median_proportion), by = "method") %>%
-  full_join(median_sim_15 %>% dplyr::select(method, median_15, median_proportion), by = "method") %>%
-  full_join(median_sim_20 %>% dplyr::select(method, median_20, median_proportion), by = "method")
+  dplyr::select(method, median_2.5, lowest_2.5, highest_2.5, median_proportion) %>%
+  full_join(median_sim_5 %>% dplyr::select(method, median_5, lowest_5, highest_5, median_proportion), by = "method") %>%
+  full_join(median_sim_10 %>% dplyr::select(method, median_10, lowest_10, highest_10, median_proportion), by = "method") %>%
+  full_join(median_sim_15 %>% dplyr::select(method, median_15, lowest_15, highest_15, median_proportion), by = "method") %>%
+  full_join(median_sim_20 %>% dplyr::select(method, median_20, lowest_20, highest_20, median_proportion), by = "method")
+
+View(combined_medians)
 
 write.csv(combined_medians, "/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/hvg_similarity.csv", quote = FALSE, row.names = FALSE)
 
@@ -513,7 +502,57 @@ write.csv(combined_medians, "/home/alicen/Projects/ReviewArticle/damage_perturba
 # DEGs
 #-------------------------------------------------------------------------------
 
+# Positive control data ----
+
+# Restart with loading in objects 
+
+seurat_objects <- list(
+  
+  # 2.5 % 
+  control_sim_1_2.5 = control_sim_1$control_sim_1_2.5, 
+  control_sim_2_2.5 = control_sim_2$control_sim_2_2.5, 
+  control_sim_3_2.5 = control_sim_3$control_sim_3_2.5,
+  stimulated_sim_1_2.5 = stimulated_sim_1$stimulated_sim_1_2.5, 
+  stimulated_sim_2_2.5 = stimulated_sim_2$stimulated_sim_2_2.5, 
+  stimulated_sim_3_2.5 = stimulated_sim_3$stimulated_sim_3_2.5, 
+  
+  # 5 % 
+  control_sim_1_5 = control_sim_1$control_sim_1_5, 
+  control_sim_2_5 = control_sim_2$control_sim_2_5, 
+  control_sim_3_5 = control_sim_3$control_sim_3_5,
+  stimulated_sim_1_5 = stimulated_sim_1$stimulated_sim_1_5, 
+  stimulated_sim_2_5 = stimulated_sim_2$stimulated_sim_2_5, 
+  stimulated_sim_3_5 = stimulated_sim_3$stimulated_sim_3_5, 
+  
+  # 10 % 
+  control_sim_1_10 = control_sim_1$control_sim_1_10, 
+  control_sim_2_10 = control_sim_2$control_sim_2_10, 
+  control_sim_3_10 = control_sim_3$control_sim_3_10,
+  stimulated_sim_1_10 = stimulated_sim_1$stimulated_sim_1_10, 
+  stimulated_sim_2_10 = stimulated_sim_2$stimulated_sim_2_10, 
+  stimulated_sim_3_10 = stimulated_sim_3$stimulated_sim_3_10, 
+  
+  # 15 % 
+  control_sim_1_15 = control_sim_1$control_sim_1_15, 
+  control_sim_2_15 = control_sim_2$control_sim_2_15, 
+  control_sim_3_15 = control_sim_3$control_sim_3_15,
+  stimulated_sim_1_15 = stimulated_sim_1$stimulated_sim_1_15, 
+  stimulated_sim_2_15 = stimulated_sim_2$stimulated_sim_2_15, 
+  stimulated_sim_3_15 = stimulated_sim_3$stimulated_sim_3_15,
+  
+  # 20 % 
+  control_sim_1_20 = control_sim_1$control_sim_1_20, 
+  control_sim_2_20 = control_sim_2$control_sim_2_20, 
+  control_sim_3_20 = control_sim_3$control_sim_3_20,
+  stimulated_sim_1_20 = stimulated_sim_1$stimulated_sim_1_20, 
+  stimulated_sim_2_20 = stimulated_sim_2$stimulated_sim_2_20, 
+  stimulated_sim_3_20 = stimulated_sim_3$stimulated_sim_3_20 
+  
+)
+
+
 # F1 scoring ----
+
 
 calculate_f1 <- function(set_A, set_B) {
   
@@ -539,7 +578,7 @@ calculate_f1 <- function(set_A, set_B) {
 
 # Calculate control DEGs ----
 
-# In a cell-type specific manner, find the DEGs for each damage case (2.5, 5, 10, 15, 20)
+# In a cell-type specific manner, find the DEGs for the positive controls (2.5, 5, 10, 15, 20)
 
 # Helper function for merging across 2.5, 5, 10, 15, 20 cases
 merge_seurat_objects <- function(damage_percentage) {
@@ -587,6 +626,7 @@ perform_deg_analysis <- function(merged) {
   parent_DEGs <- list()
   
   for (set in sets) {
+    
     # Check if both identifiers are present in the data and have a size of at least 3
     if (set$ident_1 %in% names(table(Idents(psuedo))) & set$ident_2 %in% names(table(Idents(psuedo))) & 
         table(Idents(psuedo))[set$ident_1] >= 3 & table(Idents(psuedo))[set$ident_2] >= 3) {
@@ -610,12 +650,14 @@ perform_deg_analysis <- function(merged) {
 
 # Iterate over each damage percentage and perform the analysis
 damage_percentages <- c("2.5", "5", "10", "15", "20")
+
 all_parent_DEGs <- list()
 
 for (damage_percentage in damage_percentages) {
   merged <- merge_seurat_objects(damage_percentage)
   parent_DEGs <- perform_deg_analysis(merged)
   all_parent_DEGs[[paste0("damage_", damage_percentage)]] <- parent_DEGs
+  
 }
 
 
@@ -777,14 +819,14 @@ compare_deg_sets <- function(damage_percent,  # Case of interest (2.5, 5, 10, 15
                        F1_score = numeric(),
                        stringsAsFactors = FALSE)
   
+  object_DEGs <- list()
+  
   # Define each damaged detection method (as exists in column of Seurat meta data)
   methods <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
                 "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
   
-  # method = "manual_all"
   for (method in methods) {
-    
-    # Print new lines
+  
     cat("\n\n")
     message(method)
     
