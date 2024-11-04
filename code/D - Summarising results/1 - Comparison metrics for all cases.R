@@ -6,9 +6,6 @@
 # 1. The proportion of damaged cells for each tool - violin plot 
 # 2. The similarity between the tools (Cohen's Kappa)-  PCA plots
 # 3. Consistency score : combines proportion damaged & similarity - bar plot 
-# 4. Dimensionality reduction plots - UMAPs or tSNEs using mt-rb genes 
-
-
 
 #-------------------------------------------------------------------------------
 # PREPARATIONS
@@ -24,8 +21,8 @@ library(irr)
 
 # Load datasets  -----
 # Ground truth 
-apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_apoptotic.csv")
-pro_apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_proapoptotic.csv")
+apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK2.csv")
+pro_apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_pro.csv")
 GM18507_dead <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dead.csv")
 GM18507_dying <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dying.csv")
 PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.csv")
@@ -42,7 +39,7 @@ hLiver <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/hLiver
 hLung <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/hLung.csv")
 hodgkin <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/hodgkin.csv")
 hPBMC <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/hPBMC.csv")
-Jurkat <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/jurkat.csv")
+Jurkat <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/Jurkat.csv")
 mLiver <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mLiver.csv")
 mLung <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mLung.csv")
 mPBMC <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mPBMC.csv")
@@ -313,8 +310,8 @@ proportion_damaged_simulated_plot <- ggplot(simulated_full_df, aes(x = strategy,
   guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
 
 
-proportion_damaged_groundtruth_plot | proportion_damaged_non_groundtruth_plot | proportion_damaged_simulated_plot 
 
+proportion_damaged_simulated_plot | proportion_damaged_non_groundtruth_plot | proportion_damaged_groundtruth_plot
 
 #-------------------------------------------------------------------------------
 # PROPORTION UNIQUE
@@ -585,7 +582,7 @@ ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_resul
        plot = simulated_prop_plots, width = 14, height = 12, dpi = 300)
 
 
-simulated_prop_plots 
+
 
 #-------------------------------------------------------------------------------
 # SIMILATIRY PCA  
@@ -680,13 +677,13 @@ calculate_median <- function(input_list) {
   }
   
   # Combine into array
-  matrices_array <- array(unlist(matrices), dim = c(12, 12, length(matrices)))
+  matrices_array <- array(unlist(matrices), dim = c(11, 11, length(matrices)))
   
   # Calculate the median for each position across the matrices
   result <- apply(matrices_array, c(1, 2), median, na.rm = TRUE)
   
 
-  return(result) # 12 x 12 matrix 
+  return(result) # 11 x 11 matrix 
   
 }
 
@@ -766,17 +763,17 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
 groundtruth_similarity_PCA <- PlotSimilarity(matrix = groundtruth_similarity, title = "")
 ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/groundtruth_PCA.png"), 
        plot = groundtruth_similarity_PCA, width = 8, height = 7, dpi = 300)
-groundtruth_similarity_PCA
+
 
 non_groundtruth_similarity_PCA <- PlotSimilarity(non_groundtruth_similarity, title = "")
 ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/non_groundtruth_PCA.png"), 
        plot = non_groundtruth_similarity_PCA, width = 8, height = 7, dpi = 300)
-non_groundtruth_similarity_PCA
+
 
 simulated_similarity_PCA <- PlotSimilarity(simulated_similarity, title = "")
 ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/simulated_PCA.png"), 
        plot = simulated_similarity_PCA, width = 8, height = 7, dpi = 300)
-simulated_similarity_PCA 
+
 
 
 #-------------------------------------------------------------------------------
@@ -874,27 +871,6 @@ simulated_kappa_matrices <- list(simulated_matrix$control_sim_1_2.5, simulated_m
 groundtruth_deviation_scores <- calculate_deviation_scores(groundtruth_kappa_matrices, groundtruth_df)
 non_groundtruth_deviation_scores <- calculate_deviation_scores(non_groundtruth_kappa_matrices, non_groundtruth_df)
 simulated_deviation_scores <- calculate_deviation_scores(simulated_kappa_matrices, simulated_df)
-
-# Combine and perform ranking (rank closer to 1 = better performance)
-
-# Ground truth 
-consistency <- groundtruth_deviation_scores[, c("tool", "consistency")]
-consistency$groundtruth <- consistency$consistency
-consistency$groundtruth <- 13 - rank(as.numeric(consistency$groundtruth))
-consistency$consistency <- NULL
-
-# Non-ground truth
-consistency$non_groundtruth <- non_groundtruth_deviation_scores[, c("consistency")]
-consistency$non_groundtruth <- 13 - rank(as.numeric(consistency$non_groundtruth))
-
-# Simulated 
-consistency$simulated <- simulated_deviation_scores[, c("consistency")]
-consistency$simulated <- 13 - rank(as.numeric(consistency$simulated))
-
-# Save
-write.csv(consistency,
-          "/home/alicen/Projects/ReviewArticle/summarised_results/consistency_rankings.csv", 
-          quote = FALSE, row.names = FALSE)
 
 
 # Plot 

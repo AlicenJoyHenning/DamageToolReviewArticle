@@ -23,12 +23,79 @@ for (pkg in packages) {
   }
 }
 
-# Load datasets (5 cases)
-apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_apoptotic.csv")
-pro_apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_proapoptotic.csv")
-GM18507_dead <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dead.csv")
-GM18507_dying <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dying.csv")
-PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.csv")
+# Read in damaged-perturbed simulated datasets and labels using loop ----
+
+# Parent directories for the rds objects (housing count matrices)
+parent_directory_seurat <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/R_tool_input/"
+conditions <- c("control_sim", "stimulated_sim")
+percentages <- c("2.5", "5", "10", "15", "20")
+reps <- 1:3
+
+# Read in and store all objects in a list 
+simulated <- list()
+for (condition in conditions) {
+  for (percentage in percentages) {
+    for (rep in reps) {
+      # Construct the file name
+      file_name <- paste0(condition, "_", rep, "_", percentage, ".rds")
+      file_path <- file.path(parent_directory_seurat, file_name)
+      
+      # Check if the file exists before reading
+      if (file.exists(file_path)) {
+        
+        # Read the seurat object 
+        data <- readRDS(file_path)
+        
+        # Store the data in the list with a meaningful name
+        simulated[[paste0(condition, "_", rep, "_", percentage, "_seurat")]] <- data
+      }
+    }
+  }
+}
+
+# Damaged strategy outputs (dfs)
+parent_directory_df <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/benchmark_results/"
+
+# Store all resulting output dfs in list 
+results <- list()
+for (condition in conditions) {
+  for (percentage in percentages) {
+    for (rep in reps) {
+      # Construct the file name
+      file_name <- paste0(condition, "_", rep, "_", percentage, ".csv")
+      file_path <- file.path(parent_directory_df, file_name)
+      
+      # Check if the file exists before reading
+      if (file.exists(file_path)) {
+        
+        # Read the seurat object 
+        data <- read.csv(file_path)
+        
+        # Store the data in the list with a meaningful name
+        results[[paste0(condition, "_", rep, "_", percentage)]] <- data
+      }
+    }
+  }
+}
+
+
+# Transfer results to seurat objects -----
+
+for (condition in conditions) {
+  for (percentage in percentages) {
+    for (rep in reps) {
+      # Construct the key for the simulated list
+      seurat_key <- paste0(condition, "_", rep, "_", percentage, "_seurat")
+      result_key <- paste0(condition, "_", rep, "_", percentage)
+      
+      # Transfer the data frame to the seurat object's meta.data
+      simulated[[seurat_key]]@meta.data <- results[[result_key]]
+      rownames(simulated[[seurat_key]]@meta.data) <- colnames(simulated[[seurat_key]]@assays$RNA$counts)
+      
+    }
+  }
+}
+
 
 #-------------------------------------------------------------------------------
 # PERFORMANCE METRICS
@@ -67,37 +134,6 @@ results <- data.frame(dataset = character(),
 # Define a small epsilon value to avoid division by zero
 epsilon <- 1e-10
 
-# Function to calculate precision with bootstrapped CIs (1000 bootstraps)
-calc_precision_ci <- function(TP_count, FP_count, n_bootstraps = 1000, epsilon = 1e-10) {
-  
-  precisions <- numeric(n_bootstraps)
-  
-  for (i in 1:n_bootstraps) {
-    # Bootstrap resampling
-    TP_resample <- rbinom(1, TP_count + FP_count, TP_count / (TP_count + FP_count + epsilon))
-    FP_resample <- (TP_count + FP_count) - TP_resample
-    precisions[i] <- TP_resample / (TP_resample + FP_resample + epsilon)
-  }
-  precision_mean <- mean(precisions, na.rm = TRUE)
-  precision_lower <- quantile(precisions, 0.025, na.rm = TRUE)
-  precision_upper <- quantile(precisions, 0.975, na.rm = TRUE)
-  return(c(precision_mean, precision_lower, precision_upper))
-}
-
-# Function to calculate FNR with bootstrapped CIs (1000 bootstraps)
-calc_fnr_ci <- function(TP_count, FN_count, n_bootstraps = 1000, epsilon = 1e-10) {
-  fnrs <- numeric(n_bootstraps)
-  for (i in 1:n_bootstraps) {
-    # Bootstrap resampling
-    TP_resample <- rbinom(1, TP_count + FN_count, TP_count / (TP_count + FN_count + epsilon))
-    FN_resample <- (TP_count + FN_count) - TP_resample
-    fnrs[i] <- FN_resample / (TP_resample + FN_resample + epsilon)
-  }
-  fnr_mean <- mean(fnrs, na.rm = TRUE)
-  fnr_lower <- quantile(fnrs, 0.025, na.rm = TRUE)
-  fnr_upper <- quantile(fnrs, 0.975, na.rm = TRUE)
-  return(c(fnr_mean, fnr_lower, fnr_upper))
-}
 
 # Function to calculate PR-AUC with bootstrapped CIs (1000 bootstraps)
 calc_pr_auc_ci <- function(scores, labels, n_bootstraps = 1000) {
@@ -206,68 +242,8 @@ write.csv(results,
 
 View(results)
 
-#-------------------------------------------------------------------------------
-# RANKING PERFORMANCE PER METRIC
-#-------------------------------------------------------------------------------
-
-# Rank the tools per performance metric ----
-
-results_ordered <- results[, c("dataset", "strategy", "precision", "fnr", "pr_auc")]
-
-# Function to rank and assign points for precision
-rank_and_assign_points <- function(df, metric) {
-  df %>%
-    arrange(desc(!!sym(metric))) %>%
-    mutate(rank = row_number()) %>%
-    mutate(points = 11 - rank) %>%
-    select(strategy, points)
-}
-
-ranked_results <- results_ordered %>% group_by(dataset)
-
-precision_ranked <- rank_and_assign_points(ranked_results, "precision") %>% 
-  group_by(strategy) %>% 
-  summarise(precision = sum(points))
-
-fnr_ranked <- rank_and_assign_points(ranked_results, "fnr") %>% 
-  group_by(strategy) %>% 
-  summarise(fnr = sum(points))
-fnr_ranked$fnr <- 51 - fnr_ranked$fnr # inverse
-
-
-pr_auc_ranked <- rank_and_assign_points(ranked_results, "pr_auc") %>% 
-  group_by(strategy) %>% 
-  summarise(pr_auc = sum(points))
-
-
-ranked_results_output <- merge(precision_ranked, fnr_ranked, by = c("strategy"))
-ranked_results_output <- merge(ranked_results_output, pr_auc_ranked, by = c("strategy"))
-
-# Save and view final results
-write.csv(ranked_results_output, 
-          file = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/performance_ranked.csv",
-          quote = FALSE, 
-          row.names = FALSE
-)
-
-View(ranked_results_output)
-
-#-------------------------------------------------------------------------------
-# PLOT RANKS 
-#-------------------------------------------------------------------------------
 
 # Plot ranked performance bar graphs ----
-
-# Optional to read in results (if not in global environment)
-ranked_results <- read.csv(file = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/performance_ranked.csv")
-
-# Add ranking columns
-ranked_results <- ranked_results %>%
-  mutate(
-    precision_rank = rank(-precision, ties.method = "first"),
-    fnr_rank = rank(-fnr, ties.method = "first"),
-    pr_auc_rank = rank(-pr_auc, ties.method = "first")
-  )
 
 # Define the colors
 strategy_colours <- c(
@@ -309,19 +285,6 @@ rank_theme <- function() {
 }
 
 # Create the plots
-ranked_precision <- ggplot(ranked_results, aes(x = strategy, y = precision, fill = strategy)) + 
-  geom_bar(stat = "identity") + 
-  geom_text(aes(label = precision_rank), vjust = -0.5) +
-  scale_fill_manual(values = strategy_colours) +  
-  labs(title = "Ranked Precision", y = "Precision") + 
-  rank_theme() + ylim(0, 45)
-
-ranked_fnr <- ggplot(ranked_results, aes(x = strategy, y = fnr, fill = strategy)) + 
-  geom_bar(stat = "identity") + 
-  geom_text(aes(label = fnr_rank), vjust = -0.5) +
-  scale_fill_manual(values = strategy_colours) +  
-  labs(title = "Ranked FNR", y = "FNR") + 
-  rank_theme() + ylim(0, 45)
 
 ranked_prauc <- ggplot(ranked_results, aes(x = strategy, y = pr_auc, fill = strategy)) + 
   geom_bar(stat = "identity") + 
@@ -391,45 +354,6 @@ performance_bar_theme <- function() {
     )
 }
 
-# Precision plot 
-precision_plot <- ggplot(df_long %>% dplyr::filter(measure == "precision"), aes(x = strategy, y = value, fill = strategy)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
-  facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
-  scale_fill_manual(values = strategy_colours) +
-  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
-  labs(title = "", y = "") + 
-  performance_bar_theme() + 
-  theme(plot.title = element_text(hjust = -0.05),
-        axis.title.x = element_blank(),
-        axis.text.x = element_text(vjust = -1.5),
-        strip.text = element_blank(), 
-        strip.background = element_blank())
-
-ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/precision.png",
-       plot = precision_plot,
-       width = 17, height = 6.7, units = "in")
-
-# FNR plot
-fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy, y = value, fill = strategy)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
-  facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
-  scale_fill_manual(values = strategy_colours) +
-  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
-  labs(title = "", y = "") + 
-  performance_bar_theme() + 
-  theme(plot.title = element_text(hjust = -0.05),
-        axis.title.x = element_blank(),
-        axis.text.x = element_text(vjust = -1.5),
-        strip.text = element_blank(), 
-        strip.background = element_blank())
-
-ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/false_negative_rate.png",
-       plot = fnr_plot,
-       width = 17, height = 6.7, units = "in")
 
 # PR-AUC plot
 pr_auc_plot <- ggplot(df_long %>% dplyr::filter(measure == "pr_auc"), aes(x = strategy, y = value, fill = strategy)) +
@@ -528,23 +452,6 @@ PRAUC_plots <- plots$apoptotic | plots$GM18507_dead | plots$GM18507_dying | plot
 ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/PRAUC_curves.png",
        plot = PRAUC_plots,
        width = 15, height = 5.3, units = "in")
-
-#-------------------------------------------------------------------------------
-# COMBINE PLOTS 
-#-------------------------------------------------------------------------------
-
-# Arrange the plots in a single layout with specified widths and row labels
-final_plot <- (precision_plot + ranked_precision + plot_layout(widths = c(5, 1))) / 
-  (fnr_plot + ranked_fnr + plot_layout(widths = c(5, 1))) / 
-  (pr_auc_plot + ranked_prauc + plot_layout(widths = c(5, 1)))
-
-# Save the plot
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/barplots_ranked.png"), 
-       plot = final_plot , width = 25, height = 19, dpi = 300, limitsize = FALSE)
-
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/barplots_ranked.svg"), 
-       plot = final_plot, width = 20, height = 13, dpi = 300)
-
 
 
 ### End
