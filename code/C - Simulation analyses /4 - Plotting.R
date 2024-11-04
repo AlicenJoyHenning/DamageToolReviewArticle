@@ -163,63 +163,52 @@ ggsave(filename = "/home/alicen/Projects/ReviewArticle/damage_perturbation/analy
 #-------------------------------------------------------------------------------
 
 # 2. DEG correctness -----
+DEG_F1 <- read.csv("/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/deg_correctness.csv")
+View(DEG_F1)
 
-negative_controls <- read.csv("/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/DEG_negative_controls.csv")
-DEG_F1 <-  read.csv("/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/deg_correctness.csv")
+# Define the order of strategies
+strategy_order <- c(
+  "ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
+  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
+)
 
-# Function to rank and assign points for similarity
-rank_and_assign_points <- function(df, metric) {
-  df %>%
-    arrange(desc(!!sym(metric))) %>%
-    mutate(rank = row_number()) %>%
-    mutate(points = 11 - rank) %>%
-    select(method, points)
-}
+# Reshape and order for plotting, including minimum and maximum columns for error bars
+DEG_F1 <- DEG_F1 %>%
+  pivot_longer(cols = starts_with("median_F1_"), names_to = "damage_percent", values_to = "median_F1") %>%
+  mutate(
+    damage_percent = as.numeric(sub("median_F1_", "", damage_percent)),  # Extract numeric damage percentage
+    method = factor(method, levels = strategy_order),  # Ensure the method column has the specified order
+    # Add minimum and maximum scores for error bars
+    min_F1 = case_when(damage_percent == 2.5 ~ min_F1_2.5,
+                       damage_percent == 5 ~ min_F1_5,
+                       damage_percent == 10 ~ min_F1_10,
+                       damage_percent == 15 ~ min_F1_15,
+                       damage_percent == 20 ~ min_F1_20),
+    max_F1 = case_when(damage_percent == 2.5 ~ max_F1_2.5,
+                       damage_percent == 5 ~ max_F1_5,
+                       damage_percent == 10 ~ max_F1_10,
+                       damage_percent == 15 ~ max_F1_15,
+                       damage_percent == 20 ~ max_F1_20)
+  )
 
-# Initialize an empty dataframe to store the points
-points_df <- data.frame(method = DEG_F1$method)
-
-# List of damage columns
-damage_columns <- c("damaged_2.5", "damaged_5", "damaged_10", "damaged_15", "damaged_20")
-
-# Loop through each damage column, rank, and assign points
-for (damage in damage_columns) {
-  ranked <- rank_and_assign_points(DEG_F1, damage)
-  points_df <- points_df %>%
-    left_join(ranked, by = "method", suffix = c("", paste0("_", damage)))
-}
-
-# Sum the points across all damage columns
-DEG_correctness_ranked <- points_df %>%
-  rowwise() %>%
-  mutate(total_points = sum(c_across(starts_with("points_")), na.rm = TRUE)) %>%
-  select(method, total_points)
-
-# Save and view final results
-write.csv(DEG_correctness_ranked, 
-          file = "/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/DEG_correctness_ranked.csv",
-          quote = FALSE, 
-          row.names = FALSE)
- 
-View(DEG_correctness_ranked)
-
-# Plot the correctness bars -----
-
-# Define plot theme
+# Define plot theme with error bars for DEG_F1
 plot_similarity <- function(damage, data, strategy_colours) {
+  
   # Extract DropletQC value for the current damage percentage
   dropletqc_value <- data %>%
-    filter(method == "DropletQC") %>%
-    pull(!!sym(damage))
+    filter(method == "DropletQC" & damage_percent == damage) %>%
+    pull(median_F1)  # Pull median F1 score for DropletQC
   
-  # Create the plot
-  p <- ggplot(data, aes(y = method, x = !!sym(damage), fill = method)) +
+  # Create the plot with error bars
+  p <- ggplot(data %>% filter(damage_percent == damage), 
+              aes(y = method, x = median_F1, fill = method)) +
     geom_bar(stat = "identity") +
+    geom_errorbarh(aes(xmin = min_F1, xmax = max_F1), height = 0.3, color = "gray40") +  # Use min/max F1 values
     geom_vline(xintercept = dropletqc_value, color = "black", linetype = "dashed", linewidth = 0.5) +
     scale_fill_manual(values = strategy_colours) +
-    coord_cartesian(xlim = c(0.4, 1)) +  # Set x-axis range from 0.65 to 1
+    coord_cartesian(xlim = c(0.65, 1)) +
     labs(title = "",
-         x = "F1 score",
+         x = "F1 Score",
          y = "") +
     theme_classic() +
     theme(legend.position = "none",
@@ -232,33 +221,21 @@ plot_similarity <- function(damage, data, strategy_colours) {
   return(p)
 }
 
-# Define the order of strategies
-strategy_order <- c(
-  "ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
-  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
-)
 
-# Ensure the method column has the specified order
-DEG_F1 <- DEG_F1 %>%
-  mutate(method = factor(method, levels = strategy_order))
-
-# List of damage columns
-damage_columns <- c("damaged_2.5", "damaged_5", "damaged_10", "damaged_15", "damaged_20")
-
-# Create the plots using the function
-plots <- lapply(damage_columns, function(damage) {
+plots <- lapply(unique(DEG_F1$damage_percent), function(damage) {
   plot_similarity(damage, DEG_F1, strategy_colours)
 })
 
 # Name the plots
-names(plots) <- damage_columns
+names(plots) <- paste0("damage_", unique(DEG_F1$damage_percent))
 
 # Compile and save plots
-DEG_correctness_plot <- plots$damaged_2.5 | plots$damaged_5 | plots$damaged_10 | plots$damaged_15 | plots$damaged_20
+DEG_F1_plot  <- plots$damage_2.5 | plots$damage_5 | plots$damage_10 | plots$damage_15 | plots$damage_20
 
 ggsave(filename = "/home/alicen/Projects/ReviewArticle/damage_perturbation/analysis_results/DEG_correctness_plot.png",
-       plot = DEG_correctness_plot,
-       width = 17, height = 6, units = "in")
+       plot = DEG_F1_plot ,
+       width = 17, height = 6.4, units = "in")
+
 
 #-------------------------------------------------------------------------------
 # BASELINE HVG
