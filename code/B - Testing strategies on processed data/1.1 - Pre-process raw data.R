@@ -1,6 +1,6 @@
 # SCRIPT CONTEXT 
 #
-# To keep tool comparisons fair, the same processed count matrix for each sample is 
+# To keep tool comparisons fair, the processed count matrix for each sample is 
 # used as input into all tool testing. In R, the processed count matrices are stored
 # in 'Seurat' objects. For tools not run in R, like `ddqc` and `EnsembleKQC`, count matrices 
 # are converted to a csv. In all cases, matrices house identical counts. 
@@ -69,7 +69,7 @@ mouse_annotations <- genes(Mmus_edb, return.type = "data.frame")
 
 # Input processed files (Zenodo) have non-conventional gene names that need to be changed
 
-renamegenes <- function(processed_path, project_name) {
+renamegenes <- function(processed_path, project_name, output_path = "/home/alicen/Projects/ReviewArticle/R_objects/raw_seurat/") {
   
   # Read in processed object
   sample <- readRDS(processed_path)
@@ -108,7 +108,11 @@ renamegenes <- function(processed_path, project_name) {
   
   seurat$orig.ident <- project_name
   
-  return(seurat) # not saving because it needs to be processed, this is temporary form 
+  saveRDS(seurat, 
+          paste0(output_path, project_name, ".rds"))
+  
+  return(seurat) # while we are saving it, it needs to be processed, this is temporary form 
+
 }
 
 # Run the conversions 

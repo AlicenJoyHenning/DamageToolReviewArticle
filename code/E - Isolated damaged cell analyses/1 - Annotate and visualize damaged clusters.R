@@ -5,7 +5,7 @@
 # not being detected. In exploration, we found that reducing the samples by their mitochondrial and 
 # ribosomal genes resulted in two distinct populations forming across datasets. The following 
 # script repeats this process as well as determines the proportion of each population detected as damaged 
-# by each method.
+# by each method. 
 #
 # 1. View the damaged populations 
 #    - Reduce each ground truth case according to mitochondrial and ribosomal genes 
@@ -315,7 +315,57 @@ dead_SA604_tool_proportions <- find_damaged_population_detected(dead_SA604_reduc
 #-------------------------------------------------------------------------------
 
 
+plot_propotions <- function(data, 
+                            project_name,
+                            output = "/home/alicen/Projects/ReviewArticle/isolated_damaged/" ){
+
+  strategy_order <- c(
+    "ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
+    "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
+  )
+  
+  data$Method <- factor(data$Method, levels = strategy_order)
+  data <- data[order(data$Method), ]
 
 
+  # Reshape the data to long format
+  data_long <- data %>%
+    pivot_longer(cols = c(Population_A, Population_B), 
+                 names_to = "Population", 
+                 values_to = "Value") 
+
+  # Create the plot with facets
+  combined_plot <- ggplot(data_long, 
+                          aes(y = Method, x = Value, fill = Population)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = c("Population_A" = "#D3D3D3", "Population_B" = "#8DC5BD")) +
+    labs(title = "",
+         x = "",
+         y = "") +
+    theme_classic() +
+    coord_cartesian(xlim = c(0, 100)) + 
+    theme(legend.position = "none",
+          axis.text.x = element_text(size = 16, vjust = -0.5),
+          axis.ticks = element_blank(),
+          axis.title.x = element_text(size = 16, vjust = -1.5),
+          panel.border = element_rect(fill = NA, color = "black", linewidth = 1.5),
+          panel.spacing = unit(2, "lines"),
+          strip.text = element_blank(),  
+          strip.background = element_blank() 
+    ) +
+    facet_wrap(~ Population, scales = "free_x")
+
+  ggsave(filename = paste0(output, project_name, "_proportions.png"),
+         plot = combined_plot,
+         width = 11, height = 5.5, units = "in")
+
+}
+
+
+plot_propotions(apoptotic_tool_proportions, "apoptotic")
+plot_propotions(pro_apoptotic_tool_proportions, "pro_apoptotic")
+plot_propotions(dead_SA928_tool_proportions, "dead_SA928")
+plot_propotions(dying_SA928_tool_proportions, "dying_SA928")
+plot_propotions(dead_SA604_tool_proportions, "dead_SA604")
 
 
