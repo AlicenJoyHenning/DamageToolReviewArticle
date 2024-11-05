@@ -5,8 +5,8 @@
 #    Whether damaged filtering protocol was explained 
 #
 # 2. Strategy used 
-#    If explained, what strategy was used. First strategy was matched to of the following 11  
-#    but if no appropriate match was found the method was added to other 
+#    If explained, what strategy was used. First strategy was matched to one of the following 11  
+#    but if no appropriate match was found the method was added to 'Other' 
 # 
 #    Tools: ddqc, DropletQC, ensembleKQC, miQC, scater, valiDrops
 #    Manaul (outlier detection of any kind): 
