@@ -3,8 +3,8 @@
 # Benchmarking damaged cell detection strategies. The labelled output objects are loaded at the start of the script. 
 #   (3 - Run remaining detection strategies.R) From here, the script uses the labels stored in the objects to calculate: 
 #
-# 1. The proportion of damaged cells for each tool - violin plot 
-# 2. The similarity between the tools (Cohen's Kappa)-  PCA plots
+# 1. The proportion of damaged and unique cells for each tool - mirrored bar plot 
+# 2. The similarity between the tools (Cohen's Kappa)-  PCA plot
 # 3. Consistency score : combines proportion damaged & similarity - bar plot 
 
 #-------------------------------------------------------------------------------
@@ -12,12 +12,14 @@
 #-------------------------------------------------------------------------------
 
 # Load necessary libraries
-library(cowplot)
-library(ggplot2)
-library(ggrepel)
-library(dplyr)
-library(purrr)
-library(irr)
+packages <- c("cowplot", "dplyr", "ggrepel", "ggplot2", 'irr', "Seurat", "purrr")
+
+for (pkg in packages) {
+  if (!require(pkg, character.only = TRUE)) {
+    library(pkg)
+  }
+}
+
 
 # Load datasets  -----
 # Ground truth 
@@ -75,8 +77,6 @@ for (condition in conditions) {
 View(simulated$control_sim_1_2.5)
 
 # Define palette
-
-# Define the colors
 strategy_colours <- c(
   "ddqc" = "#CE9DBA",
   "DropletQC" = "#A799C9",

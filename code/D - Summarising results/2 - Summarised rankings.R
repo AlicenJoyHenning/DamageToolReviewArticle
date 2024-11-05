@@ -29,12 +29,14 @@
 #-------------------------------------------------------------------------------
 
 # Load necessary libraries
-library(cowplot)
-library(ggplot2)
-library(ggrepel)
-library(dplyr)
-library(purrr)
-library(irr)
+packages <- c("cowplot", "dplyr", "ggrepel", "ggplot2", 'irr', "Seurat", "purrr")
+
+for (pkg in packages) {
+  if (!require(pkg, character.only = TRUE)) {
+    library(pkg)
+  }
+}
+
 
 
 #-------------------------------------------------------------------------------

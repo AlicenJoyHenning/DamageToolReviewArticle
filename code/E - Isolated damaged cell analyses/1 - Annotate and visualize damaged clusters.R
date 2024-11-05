@@ -23,10 +23,13 @@
 
 # Load libraries -------
 
-library(Seurat)
-library(ggplot2)
-library(svglite)
-library(AnnotationHub)
+packages <- c("AnnotationHub", "biomaRt", "dplyr", "ggplot2", "Seurat", "svglite")
+
+for (pkg in packages) {
+  if (!require(pkg, character.only = TRUE)) {
+    library(pkg)
+  }
+}
 
 
 # Load data -------
@@ -37,6 +40,11 @@ pro_apoptotic_isolated <- readRDS("/home/alicen/Projects/limiric/damage_left_beh
 dead_SA928_isolated    <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/reduced_dead_SA928_isolated.rds")
 dying_SA928_isolated   <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/reduced_dying_SA928_isolated.rds")
 dead_SA604_isolated    <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/reduced_dead_SA604_isolated.rds")
+
+dead_SA928_isolated    <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/raw_seurat/GM18507_dead.rds")
+dying_SA928_isolated    <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/raw_seurat/GM18507_dying.rds")
+dead_SA604_isolated    <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/raw_seurat/PDX_dead.rds")
+
 
 
 #-------------------------------------------------------------------------------
@@ -61,7 +69,11 @@ annotations <- genes(Hsap_edb, return.type = "data.frame")
 # Generate reductions -------
 
 # Function to correct orig.ident if necessary & add dimensionality reductions for plotting 
-edit_objects <- function(seurat, project_name, meta_data_edit = FALSE, reduce = TRUE){
+edit_objects <- function(seurat, 
+                         project_name, 
+                         meta_data_edit = FALSE, 
+                         reduce = TRUE, 
+                         method = "UMAP"){
   
   # Convert meta data if necessary 
   if (meta_data_edit){
@@ -96,14 +108,30 @@ edit_objects <- function(seurat, project_name, meta_data_edit = FALSE, reduce = 
   
   } else {reduced <- seurat}
   
+  if (method == "UMAP"){
+  
   reduced <- NormalizeData(reduced) %>%
     FindVariableFeatures() %>%
     ScaleData() %>%
     RunPCA() %>%
     FindNeighbors(dims = 1:30) %>%
-    FindClusters(resolution = 1) %>%
-    RunUMAP(dims = 1:30) %>% 
-    RunTSNE(dims = 1:30)
+    FindClusters(resolution = 1.2) %>% # High for finer differentiation 
+    RunUMAP(dims = 1:30)  
+  
+  }
+  
+  if (method == "TSNE"){
+    
+    reduced <- NormalizeData(reduced) %>%
+      FindVariableFeatures() %>%
+      ScaleData() %>%
+      RunPCA() %>%
+      FindNeighbors(dims = 1:30) %>%
+      FindClusters(resolution = 1.2) %>% # High for finer differentiation 
+      RunTSNE(dims = 1:30)  
+    
+  }
+  
   
   # Ensure gene expression is from original, not reduced, object
   reduced@assays$RNA <- seurat@assays$RNA
@@ -125,7 +153,6 @@ edit_objects <- function(seurat, project_name, meta_data_edit = FALSE, reduce = 
   # Plot 
   plot <- FeaturePlot(reduced,
               features = "mt.percent",
-              reduction = "umap", 
               label = TRUE, 
               label.size = 7) + 
     NoAxes() + NoLegend() +
@@ -146,25 +173,25 @@ edit_objects <- function(seurat, project_name, meta_data_edit = FALSE, reduce = 
 # B : low mito 
 
 # Apoptotic
-apoptotic_reduced <- edit_objects(apoptotic_isolated, "apoptotic_isolated")
-apoptotic_reduced$damaged_population <- ifelse(apoptotic_reduced$seurat_clusters %in% c(1, 2), "B", "A")
+apoptotic_reduced <- edit_objects(apoptotic_isolated, "apoptotic_isolated", method = "UMAP", reduce = FALSE)
+apoptotic_reduced$damaged_population <- ifelse(apoptotic_reduced$seurat_clusters %in% c(0, 3, 6), "B", "A")
 
 # Pro-apoptotic
-pro_apoptotic_reduced <- edit_objects(pro_apoptotic_isolated, "pro_apoptotic_isolated")
-pro_apoptotic_reduced$damaged_population <- ifelse(pro_apoptotic_reduced$seurat_clusters %in% c(0, 2, 3), "B", "A")
+pro_apoptotic_reduced <- edit_objects(pro_apoptotic_isolated, "pro_apoptotic_isolated",  method = "UMAP", reduce = FALSE)
+pro_apoptotic_reduced$damaged_population <- ifelse(pro_apoptotic_reduced$seurat_clusters %in% c(2, 7, 8), "B", "A")
 
 # GM18607 dead
-dead_SA928_reduced <- edit_objects(dead_SA928_isolated, "dead_SA928_isolated", meta_data_edit = TRUE)
-dead_SA928_reduced$damaged_population <- ifelse(dead_SA928_reduced$seurat_clusters %in% c(2, 3, 5), "B", "A")
+dead_SA928_reduced <- edit_objects(dead_SA928_isolated, "dead_SA928_isolated", method = "UMAP", reduce = FALSE, meta_data_edit = TRUE)
+dead_SA928_reduced$damaged_population <- ifelse(dead_SA928_reduced$seurat_clusters %in% c(1, 4, 7, 8), "B", "A")
 
 # GM18607 dying
-dying_SA928_reduced <- edit_objects(dying_SA928_isolated, "dying_SA928_isolated", meta_data_edit = TRUE)
-dying_SA928_reduced$damaged_population <- ifelse(dying_SA928_reduced$seurat_clusters %in% c(1), "A", "B")
+dying_SA928_reduced <- edit_objects(dying_SA928_isolated, "dying_SA928_isolated", method = "UMAP", reduce = FALSE, meta_data_edit = TRUE)
+dying_SA928_reduced$damaged_population <- ifelse(dying_SA928_reduced$seurat_clusters %in% c(1, 5), "A", "B")
 
 
 # PDX dead 
-dead_SA604_reduced  <- edit_objects(dead_SA604_isolated, "dead_SA604_isolated", meta_data_edit = TRUE)
-dead_SA604_reduced$damaged_population <- ifelse(dead_SA604_reduced $seurat_clusters %in% c(0,1), "B", "A")
+dead_SA604_reduced  <- edit_objects(dead_SA604_isolated, "dead_SA604_isolated", method = "UMAP", reduce = FALSE, meta_data_edit = TRUE)
+dead_SA604_reduced$damaged_population <- ifelse(dead_SA604_reduced $seurat_clusters %in% c(0,3,4), "A", "B")
 
 
 #-------------------------------------------------------------------------------
@@ -178,12 +205,17 @@ damage_colours <- c("A" = "lightgrey",
                     "B" = "#8DC5BD") # "#CF9EBB") 
 
 # Function to specify plotting criteria
-MyDimPlot <- function(seurat, group = "damaged_population", colours = damage_colours){
+MyDimPlot <- function(seurat, 
+                      group = "damaged_population", 
+                      colours = damage_colours, 
+                      project_name,
+                      pt.size = 1,
+                      output = "/home/alicen/Projects/ReviewArticle/isolated_damaged/" ){
   
   feature_plot <- FeaturePlot(seurat,
                           reduction = "umap",
                           features = "mt.percent",
-                          pt.size = 1,
+                          pt.size = pt.size,
                           cols = c("#E6E6E6", "#001E5C")
                           ) +
     NoAxes() + 
@@ -197,7 +229,7 @@ MyDimPlot <- function(seurat, group = "damaged_population", colours = damage_col
   cluster_plot <- DimPlot(seurat,
           reduction = "umap",
           group.by = group,
-          pt.size = 1,
+          pt.size = pt.size,
          # label = TRUE,
           label.box = TRUE,
           label.size = 5,
@@ -216,15 +248,21 @@ MyDimPlot <- function(seurat, group = "damaged_population", colours = damage_col
   
   # View and save 
   print(combined)
+  ggsave(filename = paste0(output, project_name, ".png"),
+         plot = combined,
+         width = 6.4, height = 2.8, units = "in")
+  
+  
   return(combined)
   
 }
 
-MyDimPlot(apoptotic_reduced)
-MyDimPlot(pro_apoptotic_reduced)
-MyDimPlot(dead_SA928_reduced)
-MyDimPlot(dying_SA928_reduced)
-MyDimPlot(dead_SA604_reduced)
+MyDimPlot(apoptotic_reduced, project_name = "apoptotic")
+MyDimPlot(pro_apoptotic_reduced, project_name = "pro_apoptotic")
+MyDimPlot(dead_SA928_reduced, project_name = "dead_SA928", pt.size = 1.7)
+MyDimPlot(dying_SA928_reduced, project_name = "dying_SA928", pt.size = 1.7)
+MyDimPlot(dead_SA604_reduced, project_name = "dead_SA604", pt.size = 1.7)
+
 
 #-------------------------------------------------------------------------------
 # TOOL DETECTION
@@ -240,8 +278,11 @@ GM18507_dying_tool_output <- read.csv("/home/alicen/Projects/ReviewArticle/bench
 PDX_tool_output <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.csv")
 
 
-# Function to count the proportion of each population detected by the tools 
-find_damaged_population_detected <- function(seurat, tool_output, special = FALSE) {
+# Function to count the proportion of each population detected by the tools ( population-specific detected cells / size of population )
+find_damaged_population_detected <- function(seurat, 
+                                             tool_output, 
+                                             special = FALSE   # Zenodo files are 'special' and require additional formatting for compatibility 
+                                             ) {
   
   if (special){
     
@@ -310,10 +351,127 @@ dead_SA928_tool_proportions <- find_damaged_population_detected(dead_SA928_reduc
 dying_SA928_tool_proportions <- find_damaged_population_detected(dying_SA928_reduced, GM18507_dying_tool_output, special = TRUE)
 dead_SA604_tool_proportions <- find_damaged_population_detected(dead_SA604_reduced, PDX_tool_output, special = TRUE)
 
+
+# Function to count the proportion of each population detected by the tools  ( population-specific detected cells / size of tool-specific detected cells )
+find_damaged_popoulation_proportion <- function(seurat, 
+                                                tool_output, 
+                                                focus = FALSE,     # Whether to include other categories, or not and 'focus' on population A and B
+                                                special = FALSE    # Zenodo files are 'special' and require additional formatting for compatibility 
+                                                ) {
+  
+  if (special){
+    
+    # Extract barcodes of the damaged population of interest
+    population_A <- subset(seurat, damaged_population == "A") 
+    population_A$barcode <-  rownames(population_A@meta.data)
+    population_A <- as.character(sub(".*_(.*)", "\\1", population_A$barcode))
+    
+    population_B <- subset(seurat, damaged_population == "B")
+    population_B$barcode <-  rownames(population_B@meta.data)
+    population_B <- as.character(sub(".*_(.*)", "\\1", population_B$barcode))
+    
+  } else {
+    
+    # Extract barcodes of the damaged population of interest
+    population_A <- subset(seurat, damaged_population == "A") 
+    population_A <- rownames(population_A@meta.data)
+    population_B <- subset(seurat, damaged_population == "B") 
+    population_B <- rownames(population_B@meta.data)
+    
+  }
+  
+  # Add to the tool comparison output 
+  tool_output$barcode <- sub(".*_(.*)", "\\1", tool_output$X)
+  
+  tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_A, "A", "-")
+  tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_B, "B", tool_output$damaged_population)
+  
+  
+  methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",      
+               "manual_all", "manual_mito_ribo","manual_mito","manual_malat1","manual_mito_isolated")
+  
+  if (focus){
+  
+  detected_proportions <- data.frame(Method = character(),
+                                     Population_A = numeric(), 
+                                     Population_B = numeric(), 
+                                     Population_other = numeric(), 
+                                     stringsAsFactors = FALSE)
+  
+  
+  for (method in methods) {
+    
+    tool_output$detected_A <- ifelse(tool_output[[method]] == "damaged" & tool_output$damaged_population == "A", "detected", "missed")
+    tool_output$detected_B <- ifelse(tool_output[[method]] == "damaged" & tool_output$damaged_population == "B", "detected", "missed")
+    tool_output$detected_other <- ifelse(tool_output[[method]] == "damaged" & (tool_output$damaged_population != "B" & tool_output$damaged_population != "A"), "detected", "missed")
+    
+    
+    total_cell_detection <- sum(tool_output[[method]] == "damaged") 
+      
+    proportion_A <- (sum(tool_output$detected_A == "detected")/total_cell_detection) * 100
+    proportion_B <- (sum(tool_output$detected_B == "detected")/total_cell_detection) * 100
+    proportion_other <- (sum(tool_output$detected_other == "detected")/total_cell_detection) * 100
+    
+    # Create a new row 
+    new_row <- data.frame(Method = method,
+                          Population_A = proportion_A, 
+                          Population_B = proportion_B,
+                          Population_other = proportion_other)
+    
+    # Append the new row to results
+    detected_proportions <- rbind(detected_proportions, new_row)
+    
+  }
+  
+  } else {
+    
+    detected_proportions <- data.frame(Method = character(),
+                                       Population_A = numeric(), 
+                                       Population_B = numeric(), 
+                                       stringsAsFactors = FALSE)
+    
+    
+    for (method in methods) {
+      
+      tool_output$detected_A <- ifelse(tool_output[[method]] == "damaged" & tool_output$damaged_population == "A", "detected", "missed")
+      tool_output$detected_B <- ifelse(tool_output[[method]] == "damaged" & tool_output$damaged_population == "B", "detected", "missed")
+      tool_output$detected_other <- ifelse(tool_output[[method]] == "damaged" & (tool_output$damaged_population != "B" & tool_output$damaged_population != "A"), "detected", "missed")
+      
+      
+      total_cell_detection <- sum(tool_output$detected_A == "detected") + sum(tool_output$detected_B == "detected")
+      
+      proportion_A <- (sum(tool_output$detected_A == "detected")/total_cell_detection) * 100
+      proportion_B <- (sum(tool_output$detected_B == "detected")/total_cell_detection) * 100
+      
+      # Create a new row 
+      new_row <- data.frame(Method = method,
+                            Population_A = proportion_A, 
+                            Population_B = proportion_B)
+      
+      # Append the new row to results
+      detected_proportions <- rbind(detected_proportions, new_row)
+      
+    }
+    
+  }
+  
+  
+  return(detected_proportions)
+  
+}
+
+
+apoptotic_tool_proportions_alt <- find_damaged_popoulation_proportion(apoptotic_reduced, apoptotic_tool_output)
+pro_apoptotic_tool_proportions_alt <- find_damaged_popoulation_proportion(pro_apoptotic_reduced, pro_apoptotic_tool_output)
+dead_SA928_tool_proportions_alt <- find_damaged_popoulation_proportion(dead_SA928_reduced, GM18507_dead_tool_output, special = TRUE)
+dying_SA928_tool_proportions_alt <- find_damaged_popoulation_proportion(dying_SA928_reduced, GM18507_dying_tool_output, special = TRUE)
+dead_SA604_tool_proportions_alt <- find_damaged_popoulation_proportion(dead_SA604_reduced, PDX_tool_output, special = TRUE)
+
 #-------------------------------------------------------------------------------
 # PLOT
 #-------------------------------------------------------------------------------
 
+# Separate bar plots for each proportion ----
 
 plot_propotions <- function(data, 
                             project_name,
@@ -368,4 +526,101 @@ plot_propotions(dead_SA928_tool_proportions, "dead_SA928")
 plot_propotions(dying_SA928_tool_proportions, "dying_SA928")
 plot_propotions(dead_SA604_tool_proportions, "dead_SA604")
 
+
+
+
+# Stacked bar plot for tool-specific proportion -----
+
+
+plot_proportions_alt <- function(data, 
+                                 project_name,
+                                 focus = FALSE,  # Whether to include other categories, or not and 'focus' on population A and B
+                                 output = "/home/alicen/Projects/ReviewArticle/isolated_damaged/") {
+  
+  strategy_order <- c(
+    "ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
+    "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
+  )
+  
+  data$Method <- factor(data$Method, levels = strategy_order)
+  data <- data[order(data$Method), ]
+  
+  if (focus){
+    
+  # Reshape the data to long format
+  data_long <- data %>%
+    pivot_longer(cols = c(Population_A, Population_B, Population_other), 
+                 names_to = "Population", 
+                 values_to = "Value") 
+  
+  # Create the stacked bar plot
+  combined_plot <- ggplot(data_long, 
+                          aes(x = Value, y = Method, fill = Population)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = c("Population_A" = "#D3D3D3", "Population_B" = "#8DC5BD", "Population_other" = "#808C98")) +
+    labs(title = "",
+         x = "",
+         y = "") +
+    theme_classic() +
+    coord_cartesian(xlim = c(0, 100)) + 
+    theme(legend.position = "none",
+          axis.text.x = element_text(size = 16, vjust = -0.5),
+          axis.ticks = element_blank(),
+          axis.title.x = element_text(size = 16, vjust = -1.5),
+          panel.border = element_rect(fill = NA, color = "black", linewidth = 1.5),
+          panel.spacing = unit(2, "lines"),
+          strip.text = element_blank(),  
+          strip.background = element_blank()
+    )
+  
+  ggsave(filename = paste0(output, project_name, "_proportions_stacks.png"),
+         plot = combined_plot,
+         width = 7, height = 5, units = "in")
+  
+  } else {
+    
+    # Reshape the data to long format
+    data_long <- data %>%
+      pivot_longer(cols = c(Population_A, Population_B), 
+                   names_to = "Population", 
+                   values_to = "Value") 
+    
+    # Create the stacked bar plot
+    combined_plot <- ggplot(data_long, 
+                            aes(x = Value, y = Method, fill = Population)) +
+      geom_bar(stat = "identity") +
+      scale_fill_manual(values = c("Population_A" = "#D3D3D3", "Population_B" = "#8DC5BD")) + 
+      labs(title = "",
+           x = "",
+           y = "") +
+      theme_classic() +
+      coord_cartesian(xlim = c(0, 100)) + 
+      theme(legend.position = "none",
+            axis.text.x = element_text(size = 16, vjust = -0.5),
+            axis.ticks = element_blank(),
+            axis.title.x = element_text(size = 16, vjust = -1.5),
+            panel.border = element_rect(fill = NA, color = "black", linewidth = 1.5),
+            panel.spacing = unit(2, "lines"),
+            strip.text = element_blank(),  
+            strip.background = element_blank()
+      )
+    
+    ggsave(filename = paste0(output, project_name, "_proportions_stacks_focused.png"),
+           plot = combined_plot,
+           width = 7, height = 5, units = "in")
+    
+  }
+
+  
+}
+
+
+plot_proportions_alt(apoptotic_tool_proportions_alt, "apoptotic")
+plot_proportions_alt(pro_apoptotic_tool_proportions_alt, "pro_apoptotic")
+plot_proportions_alt(dead_SA928_tool_proportions_alt, "dead_SA928")
+plot_proportions_alt(dying_SA928_tool_proportions_alt, "dying_SA928")
+plot_proportions_alt(dead_SA604_tool_proportions_alt, "dead_SA604")
+
+
+### End
 
