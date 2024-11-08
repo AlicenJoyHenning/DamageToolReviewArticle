@@ -12,53 +12,46 @@
 install.packages("rentrez")
 library(rentrez)
 
+# Set the working directory to the Zenodo directory 
+# setwd("/Users/name/Zenodo")
 
 #-------------------------------------------------------------------------------
 # Perform the search 
 #-------------------------------------------------------------------------------
 
-# Define search query (PubMed)
-query <- '"single cell RNA sequencing" OR "scRNA-seq" OR "single-cell transcriptomics" AND (dataset OR data OR protocol OR experiment)'
-
-# Perform search on PubMed
-search_results <- entrez_search(db="pubmed", term=query, retmax=150, use_history=TRUE)
-
-# Use search IDs to retrieve paper information 
-search_ids <- search_results$ids
-papers     <- entrez_summary(db="pubmed", id=search_ids)
-papers_df  <- data.frame(title = sapply(papers_list, function(x) x$title),
-                         pubdate = sapply(papers_list, function(x) x$pubdate)
-)
-
-# Filter papers without complete dates (day, month, and year)
-papers_df <- papers_df[grepl("^\\d{4} [A-Za-z]{3} \\d{2}$", papers_df$pubdate), ] # 9999 > 3864
-
-
-# Select subset of papers from each year for review
-
-# Add columns for filtering
-papers_df$year <- as.numeric(sub("^(\\d{4}).*", "\\1", papers_df$pubdate))
-papers_df$month <- sub("^\\d{4} ([A-Za-z]{3}).*", "\\1", papers_df$pubdate)
-
 # Define years of interest 
-years <- c(2024, 2023, 2022, 2020, 2019)
-sample_size <- 20
-
-# Sample
+years <- c(2024, 2023, 2022, 2020, 2019, 2018, 2017, 2016, 2015)
+sample_size <- 30
 sampled_papers <- list()
 
 for (year in years) {
+  # Define search query with date range for each year
+  query <- sprintf('"single cell RNA sequencing" OR "scRNA-seq" OR "single-cell transcriptomics" AND (dataset OR data OR protocol OR experiment) AND ("%d"[PDAT] : "%d"[PDAT])', year, year)
   
-  yearly_papers <- papers_df[papers_df$year == year, ]
+  # Perform search on PubMed
+  search_results <- entrez_search(db="pubmed", term=query, retmax=150, use_history=TRUE)
+  
+  # Use search IDs to retrieve paper information 
+  search_ids <- search_results$ids
+  papers <- entrez_summary(db="pubmed", id=search_ids)
+  papers_df <- data.frame(title = sapply(papers, function(x) x$title),
+                          pubdate = sapply(papers, function(x) x$pubdate))
+  
+  # Filter papers without complete dates (day, month, and year)
+  papers_df <- papers_df[grepl("^\\d{4} [A-Za-z]{3} \\d{2}$", papers_df$pubdate), ]
+  
+  # Extract year and month
+  papers_df$year <- as.numeric(sub("^(\\d{4}).*", "\\1", papers_df$pubdate))
+  papers_df$month <- sub("^\\d{4} ([A-Za-z]{3}).*", "\\1", papers_df$pubdate)
   
   year_sample <- data.frame()
   
   for (month in month.abb) {
-    monthly_papers <- yearly_papers[yearly_papers$month == month, ]
+    monthly_papers <- papers_df[papers_df$month == month, ]
     
-    # If there are more papers than needed, sample approx 2 (20/12) from each month
+    # If there are more papers than needed, sample approx 2.5 (30/12) from each month
     if (nrow(monthly_papers) > 0) {
-      month_sample <- monthly_papers[sample(seq_len(nrow(monthly_papers)), min(2, nrow(monthly_papers))), ]
+      month_sample <- monthly_papers[sample(seq_len(nrow(monthly_papers)), min(3, nrow(monthly_papers))), ]
       year_sample <- rbind(year_sample, month_sample)
     }
   }
@@ -66,78 +59,8 @@ for (year in years) {
   # If there are fewer than sample_size, sample additional papers
   if (nrow(year_sample) < sample_size) {
     remaining_needed <- sample_size - nrow(year_sample)
-    additional_papers <- yearly_papers[!yearly_papers$ids %in% year_sample$ids, ]
-    additional_sample <- additional_papers[sample(seq_len(nrow(additional_papers)), remaining_needed), ]
-    year_sample <- rbind(year_sample, additional_sample)
-  }
-  
-  sampled_papers[[as.character(year)]] <- year_sample
-  
-}
-
-# Combine all samples 
-final_sampled_papers <- do.call(rbind, sampled_papers) # 116 papers 
-
-# Save the search result to a file for reproducibility
-write.csv(final_sampled_papers, "/home/alicen/Projects/ReviewArticle/article_search/PubMed_search_papers.csv", quote = FALSE, row.names = FALSE)
-
-
-#-------------------------------------------------------------------------------
-# Continued search
-#-------------------------------------------------------------------------------
-
-# ISolating papers before 2019 -----
-
-# Define search query before 2019
-query <- '"single cell RNA sequencing" OR "scRNA-seq" OR "single-cell transcriptomics" AND (dataset OR data OR protocol OR experiment) AND (2015[PDAT] : 2018[PDAT])'
-
-# Perform search on PubMed
-search_results <- entrez_search(db="pubmed", term=query, retmax=150, use_history=TRUE)
-
-# Use search IDs to retrieve paper information 
-search_ids <- search_results$ids
-papers <- entrez_summary(db="pubmed", id=search_ids)
-
-# Convert papers to a data frame
-papers_df <- data.frame(
-  title = sapply(papers, function(x) x$title),
-  pubdate = sapply(papers, function(x) x$pubdate)
-)
-
-# Extract the year and month from pubdate
-papers_df$year <- as.numeric(sub("^(\\d{4}).*", "\\1", papers_df$pubdate))
-papers_df$month <- sub("^\\d{4} ([A-Za-z]{3}).*", "\\1", papers_df$pubdate)
-
-# Filter for articles with valid year data, starting from 2015
-papers_df <- papers_df[!is.na(papers_df$year) & papers_df$year >= 2015, ]
-
-# Define years of interest
-years <- c( 2018, 2017, 2016, 2015)
-sample_size <- 50
-
-# Sampling process
-sampled_papers <- list()
-
-for (year in years) {
-  
-  yearly_papers <- papers_df[papers_df$year == year, ]
-  
-  year_sample <- data.frame()
-  
-  for (month in month.abb) {
-    monthly_papers <- yearly_papers[yearly_papers$month == month, ]
+    additional_papers <- papers_df[!papers_df$title %in% year_sample$title, ]
     
-    # If there are more papers than needed, sample approx 2 (20/12) from each month
-    if (nrow(monthly_papers) > 0) {
-      month_sample <- monthly_papers[sample(seq_len(nrow(monthly_papers)), min(2, nrow(monthly_papers))), ]
-      year_sample <- rbind(year_sample, month_sample)
-    }
-  }
-  
-  # If fewer than sample_size, sample additional papers from the remaining pool
-  if (nrow(year_sample) < sample_size) {
-    remaining_needed <- sample_size - nrow(year_sample)
-    additional_papers <- yearly_papers[!yearly_papers$title %in% year_sample$title, ]
     if (nrow(additional_papers) > 0) {
       additional_sample <- additional_papers[sample(seq_len(nrow(additional_papers)), min(remaining_needed, nrow(additional_papers))), ]
       year_sample <- rbind(year_sample, additional_sample)
@@ -147,11 +70,11 @@ for (year in years) {
   sampled_papers[[as.character(year)]] <- year_sample
 }
 
-# Combine all samples
+# Combine all samples 
 final_sampled_papers <- do.call(rbind, sampled_papers)
 
 # Save the search result to a file for reproducibility
-write.csv(final_sampled_papers, "/home/alicen/Projects/ReviewArticle/article_search/PubMed_search_papers_before_2018.csv", quote = FALSE, row.names = FALSE)
+write.csv(final_sampled_papers, "./A_Search_Strategies/data/PubMed_search_papers.csv", quote = FALSE, row.names = FALSE)
 
 
 ### End 
