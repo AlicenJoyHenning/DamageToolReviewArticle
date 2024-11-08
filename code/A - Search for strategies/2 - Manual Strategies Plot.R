@@ -35,72 +35,131 @@
 library(ggplot2)
 library(dplyr)
 
-
+# Set the working directory to the Zenodo directory 
+# setwd("/Users/name/Zenodo")
 
 #-------------------------------------------------------------------------------
-# Plotting 
+# ALL STRATEGIES 
 #-------------------------------------------------------------------------------
 
 # Read the CSV file into a data frame
-df <- read.csv("/home/alicen/Projects/ReviewArticle/article_search/PubMed_search_outcome.csv")
+df <- read.csv("./A_Search_Strategies/data/PubMed_search_papers_reviewed.csv")
+
+# Edit for consistency 
+df$Strategy <- ifelse(df$Strategy == "Not specified ", "Not specified", df$Strategy)
+df$Strategy <- ifelse(df$Strategy == "Manual_mito_isolated" | df$Strategy == "manual_mito", "Manual_mito", df$Strategy)
+df$Strategy <- ifelse(df$Strategy == "SampleQC" | df$Strategy == "scater", "Tool", df$Strategy)
+
 
 # Colours 
-Colours <- c("Yes" = "#DCDBDD",
-             "No" = "#011E5C",
-             "Manual_feature_UMI" = "#00907F",
-             "Manual_mito" = "#DDECE2",
-             "Manual_mito_isolated" = "#A6BEAF",
-             "Manual_mito_ribo" = "#CFDFB7",
-             "Other" = "#011E5C",
-             "SampleQC" = "#AFD0F7",
-             "scater" = "#88A1BD", 
-             "Manual" = "#F4F4F4",
-             "Tool-based" = "#011E5C"
+unique(df$Strategy)
+Colours <- c("Other" = "#CF9EBB",
+             "Not specified" = "#E6E6E6", 
+             "Manual_feature_UMI" = "#E6E6E6", 
+             "Tool" =  "#8DC5BD",
+             "Manual_mito_ribo" = "#8294AC",
+             "Manual_mito" = "#001E5C",
+             "Yes" = "#001E5C",
+             "No" = "#E6E6E6"
              )
 
 
-
-# Create a pie c/home/alicen/Projects/ReviewArticle/article_search/PubMed_search_outcome.csv# Create a pie chart for the Included column
+# Prepare data frame for plotting
 included_counts <- table(df$Included)
 included_df <- as.data.frame(included_counts)
 colnames(included_df) <- c("Included", "Count")
 
-
+# Create a pie chart for the strategies used
 methods_included_plot <- ggplot(included_df, aes(x = "", y = Count, fill = Included)) +
   geom_bar(stat = "identity", width = 1) +
   scale_fill_manual(values = Colours) + 
   coord_polar("y") +
   theme_void() 
 
+# Save (with transparent background)
+ggsave("./A_Search_Strategies/img/included_pie_chart.png", 
+       plot = methods_included_plot, width = 5, height = 5, units = "in", dpi = 300, bg = "transparent")
+
+
+
+#-------------------------------------------------------------------------------
+# OF ALL PRESENT STRATEGIES 
+#-------------------------------------------------------------------------------
+
+# Of those where the method is specified, what are predominant methods? 
 # Filter the data frame to include only rows where Included is "Yes"
 df_yes <- df %>% filter(Included == "Yes")
 
-# Create a pie chart for the Strategy column using the filtered data frame
+# Prepare data frame for plotting
+strategy_counts <- table(df_yes$Strategy)
+strategy_df <- as.data.frame(strategy_counts )
+colnames(strategy_df) <- c("Strategy", "Count")
+
+# As before, create a pie chart for the Strategy column using the filtered data frame
 strategy_counts <- table(df_yes$Strategy)
 strategy_df <- as.data.frame(strategy_counts)
 colnames(strategy_df) <- c("Strategy", "Count")
 
-ggplot(strategy_df, aes(x = "", y = Count, fill = Strategy)) +
+methods_prevalence_plot <- ggplot(strategy_df, aes(x = "", y = Count, fill = Strategy)) +
   geom_bar(stat = "identity", width = 1) +
   scale_fill_manual(values = Colours) +
   coord_polar("y") +
   theme_void() 
 
-# Summarize the Strategy column to categorize methods as "Manual" or "Tool-based"
-df_yes <- df_yes %>%
-  mutate(Method = case_when(
-    grepl("^Manual_", Strategy, ignore.case = TRUE) ~ "Manual",
-    Strategy == "Not_specified" ~ "Not_specified",
-    TRUE ~ "Tool-based"
-  ))
+# Save (with transparent background)
+ggsave("./A_Search_Strategies/img/methods_pie_chart.png", 
+       plot = methods_prevalence_plot, width = 5, height = 5, units = "in", dpi = 300, bg = "transparent")
 
-method_counts <- table(df_yes$Method)
-method_df <- as.data.frame(method_counts)
-colnames(method_df) <- c("Method", "Count")
 
-ggplot(method_df, aes(x = "", y = Count, fill = Method)) +
+
+### End 
+
+#-------------------------------------------------------------------------------
+# OF MITO-CENTERED STRATEGIES
+#-------------------------------------------------------------------------------
+
+# Of those where the method is specified, what are predominant methods? 
+# Filter the data frame to include only rows where Included is "Yes"
+df_mito <- df %>% filter(Threshold != "-")
+
+# Prepare data frame for plotting
+mito_counts <- table(df_mito$Threshold)
+mito_df <- as.data.frame(mito_counts )
+colnames(mito_df) <- c("Threshold", "Count")
+
+Colours <- c(
+  "3" = "#4C9A92",         
+  "5" = "#8DC5BD",        
+  "6" = "#A8D8D3",       
+  "7.5" = "#D5E7E3",       
+  "10" = "#E6E6E6",        
+  "15" = "#D1D1D1",        
+  "20" = "#B4B4B4",        
+  "25" = "#8C8C8C",        
+  "30" = "#4D5C7B",        
+  "40" = "#3B4A65",        
+  "50" = "#2A3A54",        
+  "80" = "#1A2A3F",        
+  "Not specified" = "#F1D0D6",  
+  "Sample-specific" = "#CF9EBB" 
+)
+
+# Get the unique Threshold values and order them based on the colour palette
+ordered_thresholds <- names(Colours)
+mito_df$Threshold <- factor(mito_df$Threshold, levels = ordered_thresholds)
+mito_df <- mito_df[order(mito_df$Threshold), ]
+
+# PLOT
+mito_plot <- ggplot(mito_df, aes(x = "", y = Count, fill = Threshold)) +
   geom_bar(stat = "identity", width = 1) +
+  scale_fill_manual(values = Colours) +
   coord_polar("y") +
-  theme_void() +
-  ggtitle("Summarized Strategies Pie Chart")
+  theme_void() 
 
+# Save (with transparent background)
+ggsave("./A_Search_Strategies/img/mito_pie_chart.png", 
+       plot = mito_plot, width = 5, height = 5, units = "in", dpi = 300, bg = "transparent")
+
+
+
+### End 
