@@ -122,6 +122,9 @@ ggsave("./A_Search_Strategies/img/methods_pie_chart.png",
 # Filter the data frame to include only rows where Included is "Yes"
 df_mito <- df %>% filter(Threshold != "-")
 
+median(as.numeric(numbers$Threshold))
+mean(as.numeric(numbers$Threshold))
+
 # Prepare data frame for plotting
 mito_counts <- table(df_mito$Threshold)
 mito_df <- as.data.frame(mito_counts )
