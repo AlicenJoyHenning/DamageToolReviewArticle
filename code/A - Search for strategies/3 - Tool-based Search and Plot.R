@@ -9,13 +9,16 @@
 
 # Load packages -----
 
-install.packages("rcrossref")
+# install.packages("rcrossref")
 library(rcrossref)          
 library(dplyr)
 library(ggplot2)
 library(ggrepel)
 library(patchwork)
 library(cowplot)
+
+# Set the working directory to the Zenodo directory 
+# setwd("/Users/name/Zenodo")
 
 #-------------------------------------------------------------------------------
 # Data cleaning and manual editing 
@@ -24,7 +27,7 @@ library(cowplot)
 # Prepare for visualisations -----
 
 # Read in the data frame downloaded from https://www.scrna-tools.org/table
-scRNAseqtools_df <- read.csv("/home/alicen/Projects/ReviewArticle/article_search/scRNA-tools-dates.csv")
+scRNAseqtools_df <- read.csv("./A_Search_Strategies/data/scRNA-tools-dates.csv")
 
 # For those tools with no publications, add 0 
 scRNAseqtools_df$Citations <- ifelse(scRNAseqtools_df$Citations == "'-", 0, scRNAseqtools_df$Citations)
@@ -132,78 +135,15 @@ scRNAseqtools_dff <- data.frame(lapply(scRNAseqtools_dff, function(x) {
 scRNAseqtools_dff$Date <- ifelse(scRNAseqtools_dff$Date == "", "unknown", scRNAseqtools_dff$Date)
 
 # Write out to manually enter in unknown 
-write.csv2(scRNAseqtools_dff, "Projects/ReviewArticle/article_search/scRNAseq-tools-unknown-to-be-filled-in.csv")
-
-# Continue after manual entry
-scRNAseqtools_dff <- read.csv("Projects/ReviewArticle/article_search/scRNAseq-tools-unknown-to-be-filled-in.csv")
-scRNAseqtools_dff$DOI <- NULL
-scRNAseqtools_dff$X <- NULL
-
-# Add -01 to all entries in the Date column that don't have a day
-scRNAseqtools_dff$Date <- ifelse(grepl("^\\d{4}-\\d{2}$", scRNAseqtools_dff$Date), 
-                                 paste0(scRNAseqtools_dff$Date, "-01"), 
-                                 scRNAseqtools_dff$Date)
-
-
-
-# Mark categories as either QC related, QC unrelated, QC focus ------
-
-scRNAseqtools_dff$Colour <- ifelse(
-  
-  # QC focus if QC is present and there are two or fewer other categories 
-  grepl("Quality Control", scRNAseqtools_dff$Categories) & sapply(strsplit(scRNAseqtools_dff$Categories, ", "), length) <= 3, 
-  "QC-focus", 
-  
-  # QC related if QC is present but there are three or more other categories 
-  ifelse(grepl("Quality Control", scRNAseqtools_dff$Categories) & sapply(strsplit(scRNAseqtools_dff$Categories, ", "), length) > 3, 
-         "QC-related", 
-  
-  # QC unrelated if QC not present 
-         "QC-unrelated")
-)
-
-
-
-# Damaged cell detection -----
-
-# Manually search to see which of the QC-focus tools can detect damaged cells 
-test <- subset(scRNAseqtools_dff, scRNAseqtools_dff$Colour == "QC-focus")
-test$Categories <- NULL
-
-
-write.csv(test,
-          quote = FALSE,
-          row.names = FALSE,
-          "C:/Users/alice/OneDrive/Documents/University/Masters/limiric_article/complete_details.csv"
-)
-
-damaged_focus <- read.csv("Projects/ReviewArticle/article_search/complete_details.csv", sep = ",", header = TRUE)
-damaged_focus  <- read.csv("C:/Users/alice/OneDrive/Documents/University/Masters/limiric_article/complete_details.csv", sep = ",", header = FALSE)
-colnames(damaged_focus) <- damaged_focus[1,]
-damaged_focus <- damaged_focus[-1,]
-damaged_focus$Date <- NULL
-damaged_focus$Citations <- NULL
-damaged_focus$Description <- NULL
-damaged_focus <- damaged_focus[, -3]
-damaged_focus <- damaged_focus[rowSums(is.na(damaged_focus)) != ncol(damaged_focus), ]
-
-
-write.csv(damaged_focus,
-          quote = FALSE,
-          row.names = FALSE,
-          "C:/Users/alice/OneDrive/Documents/University/Masters/limiric_article/damage_focus.csv"
-)
-
-damaged_focus  <- read.csv("/home/alicen/Projects/ReviewArticle/article_search/scRNA-tools-damage-focus.csv", sep = ",", header = FALSE)
-colnames(damaged_focus)[colnames(damaged_focus) == "V1"] <- "Name"
-colnames(damaged_focus)[colnames(damaged_focus) == "V2"] <- "Damaged"
-
+write.csv2(scRNAseqtools_dff, "./A_Search_Strategies/data/scRNAseq-tools-unknown-to-be-filled-in.csv")
 
 #-------------------------------------------------------------------------------
 # Plot
 #-------------------------------------------------------------------------------
 
-damaged_focus  <- read.csv("/home/alicen/Projects/ReviewArticle/article_search/scRNA-tools-damage-focus.csv", sep = ",", header = FALSE)
+scRNAseqtools_dff <- read.csv("./A_Search_Strategies/data/scRNAseq-tools-unknown-to-be-filled-in.csv", sep = ";", header = TRUE)
+scRNAseqtools_dff$X <- NULL
+damaged_focus  <- read.csv("./A_Search_Strategies/data/scRNA-tools-damage-focus.csv", sep = ",", header = TRUE)
 
 # Plot Scatter -----
 
@@ -217,41 +157,125 @@ year_2020 <- as.Date("2020-01-01")
 year_2022 <- as.Date("2022-01-01")
 year_2024 <- as.Date("2024-01-01")
 
-
-# Ensure the Date column is of Date type
+# Merge dataframes
 scatter_df <- merge(scRNAseqtools_dff, damaged_focus, by = "Name", all.x = TRUE)
 
-# Rename & clean our columns
-scatter_df$Colour_Final <- ifelse(is.na(scatter_df$Damaged), scatter_df$Colour, scatter_df$Damaged)
-scatter_df$Colour_Final <- ifelse(scatter_df$Colour_Final %in% c("QC-unrelated", "QC-related"), "QC unrelated", scatter_df$Colour_Final)
-scatter_df$Date <- as.Date(scatter_df$Date)
-scatter_df$Colour_Final <- ifelse(scatter_df$Name  %in% c("ddqc", "DropletQC", "EnsembleKQC", "miQC", "scater", "scuttle", "valiDrops"), "Damage focus", scatter_df$Colour_Final)
+# Ensure the Date column is of Date type (1 of month given if no date specified)
+scatter_df$Date <- as.Date(ifelse(nchar(scatter_df$Date) == 7, paste0(scatter_df$Date, "-01"), scatter_df$Date), format = "%Y-%m-%d")
 
-# Subset 
-scatter_df <- subset(scatter_df, !is.null(scatter_df$Colour_Final))
-scatter_df <- subset(scatter_df, !is.na(scatter_df$Colour_Final))
+# Filter data for quick explorations 
+scatter_df_sub <- subset(scatter_df, subset = Damaged_relatedness != "Cell QC unrelated")
+scatter_df_sub$Categories <- NULL
+scatter_df_sub$Date <- NULL
+scatter_df_sub$DOI <- NULL
+
+# Statistics of tools only capable of damaged cell removal 
+scatter_df_sub <- subset(scatter_df, subset = Damaged_relatedness == "Damage focus")
+median(scatter_df_sub$Citations)
+sd(scatter_df_sub$Citations)
+
+# Statistics of popular low quality cell removal tools 
+scatter_df_sub <- subset(scatter_df, subset = Name %in% c("DoubletFinder", "scrublet", "DropletUtils"))
+median(scatter_df_sub$Citations)
+sd(scatter_df_sub$Citations)
+
+# Label non QC-related tools 
+scatter_df$Damaged_relatedness <- ifelse(is.na(scatter_df$Damaged_relatedness), "Cell QC unrelated", scatter_df$Damaged_relatedness)
 
 # Add a small constant to the Citations column to avoid log(0) issues
 scatter_df$Citations <- scatter_df$Citations + 1
 
+# Correct the color mapping key
+scatter_df$Damaged_relatedness <- ifelse(scatter_df$Damaged_relatedness == "General cell QC ", "General cell QC", scatter_df$Damaged_relatedness)
+
 # Define the colors for each category
-unique(scatter_df$Colour_Final)
 color_mapping <- c("QC unrelated"          = "#EDEEF1",
                    "Cell QC unrelated"     = "#EDEEF1",
                    "Doublet focus"         = "#8DC5BD", 
                    "Damage focus"          = "#011E5C",  
                    "Empty droplet focus"   = "#CF9EBB", 
-                   "General cell QC "      = "#B3B5BC")
+                   "General cell QC"       = "#B3B5BC")
 
-scatter_df$viewing <- ifelse(scatter_df$Citations <= 500 & scatter_df$Colour_Final == "QC unrelated" & scatter_df$Date >= year_2016, "Filter", "Keep")
+# Filter data for plotting 
+scatter_df$viewing <- ifelse(scatter_df$Citations <= 500 & scatter_df$Damaged_relatedness == "Cell QC unrelated" & scatter_df$Date >= as.Date("2018-01-01"), "Filter", "Keep")
+table(scatter_df$viewing)
 scatter_df_sub <- subset(scatter_df, scatter_df$viewing == "Keep")
 
 # Create the scatter plot
-scatter <- ggplot(scatter_df_sub, aes(x = Date, y = Citations, color = Colour_Final)) +
-  geom_point(aes(fill = Colour_Final), size = 4, shape = 21, stroke = 0.5, color = "grey") +
+scatter <- ggplot(scatter_df_sub, aes(x = Date, y = Citations, color = Damaged_relatedness)) +
+  geom_point(aes(fill = Damaged_relatedness), size = 4, shape = 21, stroke = 0.5, color = "grey") +
   scale_fill_manual(values = color_mapping) +
   scale_y_log10() +
-  scale_x_date(breaks = c(year_2010, year_2012, year_2014, year_2016, year_2018, year_2020, year_2022, year_2024), labels = c("2010", "2012", "2014", "2016", "2018", "2020", "2022", "2024")) +
+  scale_x_date(breaks = c(as.Date("2010-01-01"), as.Date("2012-01-01"), as.Date("2014-01-01"), as.Date("2016-01-01"), as.Date("2018-01-01"), as.Date("2020-01-01"), as.Date("2022-01-01"), as.Date("2024-01-01")), labels = c("2010", "2012", "2014", "2016", "2018", "2020", "2022", "2024")) +
+  labs(y = "log(Citations)") +
+  theme_classic() + 
+  theme(
+    axis.title.y = element_text(vjust = 2, face = "bold", size = 12),
+    axis.text.x = element_text(hjust = 0, size = 12),
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.y = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "none",
+    panel.background = element_blank(),      
+    panel.border = element_blank(),
+    plot.background = element_blank()       
+  ) +
+  geom_text_repel(data = subset(scatter_df_sub, (Damaged_relatedness %in% c("Damage focus") | Name %in% c("Scater", "DoubletFinder", "Scrublet", "DropletUtils", "valiDrops"))),
+                  aes(label = Name),
+                  size = 5,
+                  color = "black",
+                  nudge_y = 0.2,
+                  nudge_x = -0.3,
+                  segment.color = "grey",
+                  segment.size = 0.5)
+
+# Save (with transparent background)
+ggsave("./A_Search_Strategies/img/scRNAseq-tools-subset.png", 
+       plot = scatter, width = 12, height = 6, units = "in", dpi = 300, bg = "transparent")
+
+
+scatter_full <- ggplot(scatter_df, aes(x = Date, y = Citations, color = Damaged_relatedness)) +
+  geom_point(aes(fill = Damaged_relatedness), size = 4, shape = 21, stroke = 0.5, color = "grey") +
+  scale_fill_manual(values = color_mapping) +
+  scale_y_log10() +
+  scale_x_date(breaks = c(as.Date("2010-01-01"), as.Date("2012-01-01"), as.Date("2014-01-01"), as.Date("2016-01-01"), as.Date("2018-01-01"), as.Date("2020-01-01"), as.Date("2022-01-01"), as.Date("2024-01-01")), labels = c("2010", "2012", "2014", "2016", "2018", "2020", "2022", "2024")) +
+  labs(y = "log(Citations)") +
+  theme_classic() + 
+  theme(
+    axis.title.y = element_text(vjust = 2, face = "bold", size = 12),
+    axis.text.x = element_text(hjust = 0, size = 12),
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.y = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "none",
+    panel.background = element_blank(),      
+    panel.border = element_blank(),
+    plot.background = element_blank()       
+  ) +
+  geom_text_repel(data = subset(scatter_df_sub, (Damaged_relatedness %in% c("Damage focus") | Name %in% c("Scater", "DoubletFinder", "Scrublet", "DropletUtils", "valiDrops"))),
+                  aes(label = Name),
+                  size = 5,
+                  color = "black",
+                  nudge_y = 0.2,
+                  nudge_x = -0.3,
+                  segment.color = "grey",
+                  segment.size = 0.5)
+
+# Save (with transparent background)
+ggsave("./A_Search_Strategies/img/scRNAseq-tools.png", 
+       plot = scatter_full, width = 12, height = 6, units = "in", dpi = 300, bg = "transparent")
+
+
+
+scatter_full_no_labels <- ggplot(scatter_df, aes(x = Date, y = Citations, color = Damaged_relatedness)) +
+  geom_point(aes(fill = Damaged_relatedness), size = 4, shape = 21, stroke = 0.5, color = "grey") +
+  scale_fill_manual(values = color_mapping) +
+  scale_y_log10() +
+  scale_x_date(breaks = c(as.Date("2010-01-01"), as.Date("2012-01-01"), as.Date("2014-01-01"), as.Date("2016-01-01"), as.Date("2018-01-01"), as.Date("2020-01-01"), as.Date("2022-01-01"), as.Date("2024-01-01")), labels = c("2010", "2012", "2014", "2016", "2018", "2020", "2022", "2024")) +
   labs(y = "log(Citations)") +
   theme_classic() + 
   theme(
@@ -267,19 +291,10 @@ scatter <- ggplot(scatter_df_sub, aes(x = Date, y = Citations, color = Colour_Fi
     panel.border = element_blank(),
     plot.background = element_blank()       
   ) 
-  +
-  geom_text_repel(data = subset(scatter_df, Colour_Final %in% c("Damage focus")),
-  aes(label = Name),
-  size = 5,
-  color = "black",
-  nudge_y = 0.2,
-  nudge_x = -0.3,
-  segment.color = "grey",
-  segment.size = 0.5)
 
 # Save (with transparent background)
-ggsave("Projects/ReviewArticle/article_search/scRNAseq-tools-no-labels.png", 
-       plot = scatter, width = 12, height = 6, units = "in", dpi = 300, bg = "transparent")
+ggsave("./A_Search_Strategies/img/scRNAseq-tools-no-labels.png", 
+       plot = scatter_full_no_labels, width = 12, height = 6, units = "in", dpi = 300, bg = "transparent")
 
 
 
