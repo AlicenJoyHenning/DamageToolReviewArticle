@@ -11,45 +11,45 @@
 # PREPARATIONS
 #-------------------------------------------------------------------------------
 
-# Load necessary libraries
-packages <- c("cowplot", "dplyr", "ggrepel", "ggplot2", 'irr', "Seurat", "purrr")
+# Load necessary libraries using pacman
+if (!require("pacman")) install.packages("pacman")
+library(pacman)
 
-for (pkg in packages) {
-  if (!require(pkg, character.only = TRUE)) {
-    library(pkg)
-  }
-}
+pacman::p_load(cowplot, dplyr, ggrepel, ggplot2, irr, Seurat, purrr)
 
 
 # Load datasets  -----
 # Ground truth 
-apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK2.csv")
-pro_apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_pro.csv")
-GM18507_dead <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dead.csv")
-GM18507_dying <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dying.csv")
-PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.csv")
+apoptotic <- read.csv("./C_Test_Strategies/data/benchmark_output/HEK293_apoptotic.csv")
+pro_apoptotic <- read.csv("./C_Test_Strategies/data/benchmark_output/HEK293_proapoptotic.csv")
+GM18507_dead <- read.csv("./C_Test_Strategies/data/benchmark_output/GM18507_dead.csv")
+GM18507_dying <- read.csv("./C_Test_Strategies/data/benchmark_output/GM18507_dying.csv")
+PDX <- read.csv("./C_Test_Strategies/data/benchmark_output/PDX_dead.csv")
 
 # Non-ground truth 
-A549 <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/A549.csv")
-dLiver <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/dLiver.csv")
-dLung <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/dLung.csv")
-dPBMC <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/dPBMC.csv")
-ductal <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/ductal.csv")
-glio <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/glio.csv")
-HCT116 <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HCT116.csv")
-hLiver <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/hLiver.csv")
-hLung <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/hLung.csv")
-hodgkin <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/hodgkin.csv")
-hPBMC <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/hPBMC.csv")
-Jurkat <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/Jurkat.csv")
-mLiver <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mLiver.csv")
-mLung <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mLung.csv")
-mPBMC <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/mPBMC.csv")
+A549 <- read.csv("./C_Test_Strategies/data/benchmark_output/A549.csv")
+dLiver <- read.csv("./C_Test_Strategies/data/benchmark_output/dLiver.csv")
+dLung <- read.csv("./C_Test_Strategies/data/benchmark_output/dLung.csv")
+dPBMC <- read.csv("./C_Test_Strategies/data/benchmark_output/dPBMC.csv")
+ductal <- read.csv("./C_Test_Strategies/data/benchmark_output/ductal.csv")
+glio <- read.csv("./C_Test_Strategies/data/benchmark_output/glio.csv")
+HCT116 <- read.csv("./C_Test_Strategies/data/benchmark_output/HCT116.csv")
+hLiver <- read.csv("./C_Test_Strategies/data/benchmark_output/hLiver.csv")
+hLung <- read.csv("./C_Test_Strategies/data/benchmark_output/hLung.csv")
+hodgkin <- read.csv("./C_Test_Strategies/data/benchmark_output/hodgkin.csv")
+hPBMC <- read.csv("./C_Test_Strategies/data/benchmark_output/hPBMC.csv")
+Jurkat <- read.csv("./C_Test_Strategies/data/benchmark_output/Jurkat.csv")
+mLiver <- read.csv("./C_Test_Strategies/data/benchmark_output/mLiver.csv")
+mLung <- read.csv("./C_Test_Strategies/data/benchmark_output/mLung.csv")
+mPBMC <- read.csv("./C_Test_Strategies/data/benchmark_output/mPBMC.csv")
 
 
 # Simulated 
 # Damaged strategy outputs (dfs)
-parent_directory_df <- "/home/alicen/Projects/ReviewArticle/damage_perturbation/benchmark_results/"
+parent_directory_df <- "./C_Test_Strategies/data/benchmark_output/"
+conditions <- c("control_sim", "stimulated_sim")
+percentages <- c("2.5", "5", "10", "15", "20")
+reps <- 1:3
 
 # Store all resulting output dfs in list 
 simulated <- list()
@@ -73,7 +73,7 @@ for (condition in conditions) {
   }
 }
 
-# Check same 
+# Check 
 View(simulated$control_sim_1_2.5)
 
 # Define palette
@@ -205,11 +205,13 @@ simulated_dfs <- list(simulated_df$control_sim_1_2.5, simulated_df$control_sim_1
                       simulated_df$stimulated_sim_3_2.5, simulated_df$stimulated_sim_3_5, simulated_df$stimulated_sim_3_10, simulated_df$stimulated_sim_3_15, simulated_df$stimulated_sim_3_20
 )
 
+all_dfs <- c(non_groundtruth_dfs, groundtruth_dfs, simulated_dfs)
 
 # Merge all data frames by 'strategy' column
 non_groundtruth_df <- reduce(non_groundtruth_dfs, full_join, by = "strategy")
 groundtruth_df <- reduce(groundtruth_dfs, full_join, by = "strategy")
 simulated_full_df <- reduce(simulated_dfs, full_join, by = "strategy")
+all_df <- reduce(all_dfs, full_join, by = "strategy")
 
 # Find median values 
 groundtruth_df <- groundtruth_df %>%
@@ -229,7 +231,7 @@ non_groundtruth_df <- non_groundtruth_df %>%
     highest_value = max(c_across(A549:mLung)),
     median_value = median(c_across(A549:mLung))
   ) %>%
-  ungroup() %>%
+  ungroup() %>% 
   mutate(strategy = factor(strategy, levels = desired_order))
 
 simulated_full_df <- simulated_full_df %>%
@@ -240,8 +242,25 @@ simulated_full_df <- simulated_full_df %>%
     median_value = median(c_across(control_sim_1_2.5:stimulated_sim_3_20))
   ) %>%
   ungroup() %>%
-  mutate(strategy = factor(strategy, levels = desired_order))
+ mutate(strategy = factor(strategy, levels = desired_order))
 
+# Instead of ordering by pre-defined coloured list, order by increasing proportion
+all_df <- all_df %>%
+  rowwise() %>%
+  mutate(
+    lowest_value = min(c_across(control_sim_1_2.5:stimulated_sim_3_20)),
+    highest_value = max(c_across(control_sim_1_2.5:stimulated_sim_3_20)),
+    median_value = median(c_across(control_sim_1_2.5:stimulated_sim_3_20))
+  ) %>%
+  ungroup() 
+
+
+all_desired_order <- all_df  %>%
+  arrange(median_value) %>%
+  pull(strategy)
+
+all_df   <- all_df  %>%
+  mutate(strategy = factor(strategy, levels = all_desired_order))
 
 
 # Damaged proportion plots
@@ -250,13 +269,14 @@ proportion_damaged_groundtruth_plot <- ggplot(groundtruth_df, aes(x = strategy, 
   geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
   scale_fill_manual(values = strategy_colours) +
   coord_flip() + 
-  scale_y_reverse(limits = c(60, 0)) +  # Reverse the y-axis
+ # scale_y_reverse(limits = c(60, 0)) +  
+  scale_y_continuous(limits = c(0, 70)) + 
   labs(title = "a      Damaged proportion", y = "") + 
   barplot_theme() + 
   theme(plot.title = element_blank(),
         plot.margin = margin(50, 10, 50, 30), 
         axis.text.y = element_blank(),
-        axis.text.x = element_text(size = 34, vjust = -0.5),
+        axis.text.x = element_text(size = 60, vjust = -0.5),
         legend.text = element_text(size = 22),
         legend.spacing.x = unit(1.0, 'cm'), 
         legend.position = "none",
@@ -267,18 +287,20 @@ proportion_damaged_groundtruth_plot <- ggplot(groundtruth_df, aes(x = strategy, 
 
 
 
+
 proportion_damaged_non_groundtruth_plot <- ggplot(non_groundtruth_df, aes(x = strategy, y = median_value, fill = strategy)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
   scale_fill_manual(values = strategy_colours) +
   coord_flip() + 
-  scale_y_reverse(limits = c(60, 0)) +  # Reverse the y-axis
+ # scale_y_reverse(limits = c(60, 0)) +  
+  scale_y_continuous(limits = c(0, 70)) + 
   labs(title = "a      Damaged proportion", y = "") + 
   barplot_theme() + 
   theme(plot.title = element_blank(),
         plot.margin = margin(50, 10, 50, 30), 
         axis.text.y = element_blank(),
-        axis.text.x = element_text(size = 34, vjust = -0.5),
+        axis.text.x = element_text(size = 60, vjust = -0.5),
         legend.text = element_text(size = 22),
         legend.spacing.x = unit(1.0, 'cm'), 
         legend.position = "none",
@@ -294,12 +316,41 @@ proportion_damaged_simulated_plot <- ggplot(simulated_full_df, aes(x = strategy,
   geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
   scale_fill_manual(values = strategy_colours) +
   coord_flip() + 
-  scale_y_reverse(limits = c(60, 0)) +  # Reverse the y-axis
+ # scale_y_reverse(limits = c(60, 0)) +  
+  scale_y_continuous(limits = c(0, 70)) + 
   labs(title = "a      Damaged proportion", y = "") + 
   barplot_theme() + 
   theme(plot.title = element_blank(),
         plot.margin = margin(50, 10, 50, 30), 
         axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 60, vjust = -0.5),
+        legend.text = element_text(size = 22),
+        legend.spacing.x = unit(1.0, 'cm'), 
+        legend.position = "none",
+        legend.justification = c(-0.05, -0.2), 
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA)) + 
+  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
+
+
+# Viewed individually 
+damaged_plot <- proportion_damaged_groundtruth_plot | proportion_damaged_non_groundtruth_plot | proportion_damaged_simulated_plot 
+ggsave(filename = file.path("./D_Summarise_Results /img/proportions_plot.png"), 
+       plot = damaged_plot, width = 40, height = 14, dpi = 300)
+
+
+
+# View collective
+proportion_damaged_plot <- ggplot(all_df, aes(x = strategy, y = median_value, fill = strategy)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = lowest_value, ymax = highest_value), width = 0.2) +
+  scale_fill_manual(values = strategy_colours) +
+  coord_flip() + 
+  scale_y_reverse(limits = c(60, 0)) +  # Reverse the y-axis
+  labs(title = "a      Damaged proportion", y = "") + 
+  barplot_theme() + 
+  theme(plot.title = element_blank(),
+        plot.margin = margin(50, 10, 50, 30), 
         axis.text.x = element_text(size = 34, vjust = -0.5),
         legend.text = element_text(size = 22),
         legend.spacing.x = unit(1.0, 'cm'), 
@@ -310,8 +361,6 @@ proportion_damaged_simulated_plot <- ggplot(simulated_full_df, aes(x = strategy,
   guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
 
 
-
-proportion_damaged_simulated_plot | proportion_damaged_non_groundtruth_plot | proportion_damaged_groundtruth_plot
 
 #-------------------------------------------------------------------------------
 # PROPORTION UNIQUE
@@ -677,7 +726,7 @@ calculate_median <- function(input_list) {
   }
   
   # Combine into array
-  matrices_array <- array(unlist(matrices), dim = c(11, 11, length(matrices)))
+  matrices_array <- array(unlist(matrices), dim = c(12, 12, length(matrices)))
   
   # Calculate the median for each position across the matrices
   result <- apply(matrices_array, c(1, 2), median, na.rm = TRUE)
@@ -703,10 +752,13 @@ simulated_matrices <- list(simulated_matrix$control_sim_1_2.5, simulated_matrix$
                            simulated_matrix$stimulated_sim_3_2.5, simulated_matrix$stimulated_sim_3_5, simulated_matrix$stimulated_sim_3_10, simulated_matrix$stimulated_sim_3_15, simulated_matrix$stimulated_sim_3_20
 )
 
+all_matrices <- c(groundtruth_matrices, non_groundtruth_matrices, simulated_matrices)
+
 # Find the median 
 groundtruth_similarity <- calculate_median(groundtruth_matrices)
 non_groundtruth_similarity <- calculate_median(non_groundtruth_matrices)
 simulated_similarity <- calculate_median(simulated_matrices)
+all_similarity <- calculate_median(all_matrices)
 
 PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
   
@@ -741,10 +793,10 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
          x = "PC 1",
          y = "PC 2") +
     theme(
-      legend.position = "none",
+      legend.position = "right",
       legend.title = element_blank(),
       panel.background = element_rect(fill = "white", color = NA),  
-      panel.border = element_rect(color = "black", fill = NA, size = 0.5),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
       axis.text = element_blank(),
       axis.ticks =  element_blank(),
       axis.title.y = element_text(size = 18, vjust = 0.5),
@@ -761,19 +813,23 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
 
 # Run the function on each covariate case
 groundtruth_similarity_PCA <- PlotSimilarity(matrix = groundtruth_similarity, title = "")
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/groundtruth_PCA.png"), 
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics//groundtruth_PCA.png"), 
        plot = groundtruth_similarity_PCA, width = 8, height = 7, dpi = 300)
 
 
 non_groundtruth_similarity_PCA <- PlotSimilarity(non_groundtruth_similarity, title = "")
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/non_groundtruth_PCA.png"), 
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/non_groundtruth_PCA.png"), 
        plot = non_groundtruth_similarity_PCA, width = 8, height = 7, dpi = 300)
 
 
 simulated_similarity_PCA <- PlotSimilarity(simulated_similarity, title = "")
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/simulated_PCA.png"), 
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/simulated_PCA.png"), 
        plot = simulated_similarity_PCA, width = 8, height = 7, dpi = 300)
 
+
+all_similarity_PCA <- PlotSimilarity(all_similarity, title = "")
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/all_PCA.png"), 
+       plot = all_similarity_PCA , width = 12, height = 7, dpi = 300)
 
 
 #-------------------------------------------------------------------------------
@@ -854,19 +910,21 @@ calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
 
 
 groundtruth_kappa_matrices <- list(apoptotic_matrix, apoptotic_matrix, GM18507_dead_matrix, GM18507_dying_matrix, PDX_matrix)
+
 non_groundtruth_kappa_matrices <- list(A549_matrix, dLiver_matrix, dLung_matrix, 
                                        dPBMC_matrix, ductal_matrix, glio_matrix, HCT116_matrix,
                                        hLiver_matrix, hLung_matrix, hodgkin_matrix, 
                                        hPBMC_matrix, Jurkat_matrix, mLiver_matrix,
-                                       mLung_matrix, mPBMC_matrix 
-)
+                                       mLung_matrix, mPBMC_matrix)
+
 simulated_kappa_matrices <- list(simulated_matrix$control_sim_1_2.5, simulated_matrix$control_sim_1_5, simulated_matrix$control_sim_1_10, simulated_matrix$control_sim_1_15, simulated_matrix$control_sim_1_20,
                            simulated_matrix$control_sim_2_2.5, simulated_matrix$control_sim_2_5, simulated_matrix$control_sim_2_10, simulated_matrix$control_sim_2_15, simulated_matrix$control_sim_2_20,
                            simulated_matrix$control_sim_3_2.5, simulated_matrix$control_sim_3_5, simulated_matrix$control_sim_3_10, simulated_matrix$control_sim_3_15, simulated_matrix$control_sim_3_20,
                            simulated_matrix$stimulated_sim_1_2.5, simulated_matrix$stimulated_sim_1_5, simulated_matrix$stimulated_sim_1_10, simulated_matrix$stimulated_sim_1_15, simulated_matrix$stimulated_sim_1_20,
                            simulated_matrix$stimulated_sim_2_2.5, simulated_matrix$stimulated_sim_2_5, simulated_matrix$stimulated_sim_2_10, simulated_matrix$stimulated_sim_2_15, simulated_matrix$stimulated_sim_2_20,
-                           simulated_matrix$stimulated_sim_3_2.5, simulated_matrix$stimulated_sim_3_5, simulated_matrix$stimulated_sim_3_10, simulated_matrix$stimulated_sim_3_15, simulated_matrix$stimulated_sim_3_20
-)
+                           simulated_matrix$stimulated_sim_3_2.5, simulated_matrix$stimulated_sim_3_5, simulated_matrix$stimulated_sim_3_10, simulated_matrix$stimulated_sim_3_15, simulated_matrix$stimulated_sim_3_20)
+
+
 
 groundtruth_deviation_scores <- calculate_deviation_scores(groundtruth_kappa_matrices, groundtruth_df)
 non_groundtruth_deviation_scores <- calculate_deviation_scores(non_groundtruth_kappa_matrices, non_groundtruth_df)
@@ -887,8 +945,8 @@ consistency_groundtruth_plot <- ggplot(groundtruth_deviation_scores, aes(x = too
         axis.text.x = element_text(size = 30, vjust = -0.7),
         plot.background = element_rect(fill = "white", color = NA)
         ) 
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/consistency_groundtruth_plot.png"), 
-       plot = consistency_groundtruth_plot, width = 7, height = 12, dpi = 300)
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_groundtruth_plot.png"), 
+       plot = consistency_groundtruth_plot, width = 12, height = 12, dpi = 300)
 
 
 consistency_non_groundtruth_plot <- ggplot(non_groundtruth_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
@@ -904,8 +962,8 @@ consistency_non_groundtruth_plot <- ggplot(non_groundtruth_deviation_scores, aes
         axis.text.x = element_text(size = 30, vjust = -0.7),
         plot.background = element_rect(fill = "white", color = NA)
         ) 
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/consistency_non_groundtruth_plot.png"), 
-       plot = consistency_non_groundtruth_plot , width = 7, height = 12, dpi = 300)
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_non_groundtruth_plot.png"), 
+       plot = consistency_non_groundtruth_plot , width = 12, height = 12, dpi = 300)
 
 consistency_simulated_plot <- ggplot(simulated_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
   geom_bar(stat = "identity") +
@@ -921,8 +979,8 @@ consistency_simulated_plot <- ggplot(simulated_deviation_scores, aes(x = tool, y
         plot.background = element_rect(fill = "white", color = NA)
   ) 
 
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/consistency_simulated_plot.png"), 
-       plot = consistency_simulated_plot, width = 7, height = 12, dpi = 300)
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_simulated_plot.png"), 
+       plot = consistency_simulated_plot, width = 12, height = 12, dpi = 300)
 
 consistency_groundtruth_plot | consistency_non_groundtruth_plot | consistency_simulated_plot
 
@@ -1028,7 +1086,7 @@ final_plot <- plot_grid(
 ) + theme(plot.background = element_rect(fill = "white", color = NA))
 
 # Save the final plot as a PNG with appropriate dimensions
-ggsave("/home/alicen/Projects/ReviewArticle/benchmark_results/comparison_metrics/comparison_metrics.png", plot = final_plot, width = 38, height = 18, units = "in")
+ggsave("./D_Summarise_Results /img/Tool_results/comparison_metrics/comparison_metrics.png", plot = final_plot, width = 38, height = 18, units = "in")
 
 
 ### End 
