@@ -376,7 +376,7 @@ benchmark <- function(
   
   # Manual 4: MALAT1 multivariate outliers (robustbase): UMI and feature counts & MALAT1 percentage -------
   
-  manual4_df <- seurat_df[, c("nCount_RNA", "nFeature_RNA", "malat1.percent")]
+  manual4_df <- seurat_df[, c("malat1.percent", "mt.percent")]
   manual4_results <- identify_moutliers(manual4_df)
   seurat$manual_malat1 <- manual4_results$outliers
   
