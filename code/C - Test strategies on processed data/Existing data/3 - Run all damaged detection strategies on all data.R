@@ -29,9 +29,12 @@
 
 # Load libraries -------
 
+# Install sampleQC from GitHub
+#devtools::install_github('wmacnair/SampleQC')
+
 packages <- c("BiocStyle", "cowplot", "devtools", "dplyr", "ggplot2", "glmGamPoi", "Matrix", "robustbase",
-              "png", "Seurat", "tidyr", 
-              "miQC", "SampleQC",  "SingleCellExperiment", "scater",
+              "png", "Seurat", "tidyr", "SampleQC",
+              "miQC",  "SingleCellExperiment", "scater",
               "scuttle", "SummarizedExperiment", "presto", "valiDrops", "DropletQC")
 
 for (pkg in packages) {
@@ -40,39 +43,46 @@ for (pkg in packages) {
   }
 }
 
+
+# Set the working directory to the Zenodo directory 
+# setwd("/Users/name/Zenodo")
+setwd("/Users/alicen/Projects/ReviewArticle/Zenodo")
+
+
 # Load processed datasets ----
 
+# Ground truth 
+GM18507_dead <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/GM18507_dead_control.rds")
+GM18507_dying <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/GM18507_dying_control.rds")
+HEK293_apo <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/HEK293_apo_control.rds")
+HEK293_pro <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/HEK293_pro_control.rds")
+PDX_dead <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/PDX_dead_control.rds")
+
+
 # Cell lines 
-A549 <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/A549_processed.rds")
-HCT116 <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/HCT116_processed.rds")
-Jurkat <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/jurkat_processed.rds")
+A549 <- readRDS("./C_Test_Strategies/data/preprocess_output/A549_processed.rds")
+HCT116 <- readRDS("./C_Test_Strategies/data/preprocess_output/HCT116_processed.rds")
+Jurkat <- readRDS("./C_Test_Strategies/data/preprocess_output/jurkat_processed.rds")
 
 # Healthy, human tissue extracts
-hLiver <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/hLiver_processed.rds")
-hLung <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/hLung_processed.rds")
-hPBMC <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/hPBMC_processed.rds")
+hLiver <- readRDS("./C_Test_Strategies/data/preprocess_output/hLiver_processed.rds")
+hLung <- readRDS("./C_Test_Strategies/data/preprocess_output/hLung_processed.rds")
+hPBMC <- readRDS("./C_Test_Strategies/data/preprocess_output/hPBMC_processed.rds")
 
 # Diseased, human tissue extracts
-dLiver <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/dLiver_processed.rds")
-dLung <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/dLung_processed.rds")
-dPBMC <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/dPBMC_processed.rds")
+dLiver <- readRDS("./C_Test_Strategies/data/preprocess_output/dLiver_processed.rds")
+dLung <- readRDS("./C_Test_Strategies/data/preprocess_output/dLung_processed.rds")
+dPBMC <- readRDS("./C_Test_Strategies/data/preprocess_output/dPBMC_processed.rds")
 
 # Mouse tissue extracts 
-mLiver <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/mLiver_processed.rds")
-mLung <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/mLung_processed.rds")
-mPBMC <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/mPBMC_processed.rds")
+mLiver <- readRDS("./C_Test_Strategies/data/preprocess_output/mLiver_processed.rds")
+mLung <- readRDS("./C_Test_Strategies/data/preprocess_output/mLung_processed.rds")
+mPBMC <- readRDS("./C_Test_Strategies/data/preprocess_output/mPBMC_processed.rds")
 
 # Tumour isolates 
-ductal <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/ductal_processed.rds")
-glio <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/glio_processed.rds")
-hodgkin <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_output/hodgkin_processed.rds")
-
-# Ground truth 
-GM18507_dead <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_groundtruth/GM18507_dead_control.rds")
-GM18507_dying <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_groundtruth/GM18507_dying_control.rds")
-HEK293_apo <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_groundtruth/HEK293_apo_control.rds")
-HEK293_pro <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_groundtruth/HEK293_pro_control.rds")
-PDX_dead <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/preprocess_groundtruth/PDX_dead_control.rds")
+ductal <- readRDS("./C_Test_Strategies/data/preprocess_output/ductal_processed.rds")
+glio <- readRDS("./C_Test_Strategies/data/preprocess_output/glio_processed.rds")
+hodgkin <- readRDS("./C_Test_Strategies/data/preprocess_output/hodgkin_processed.rds")
 
 
 
@@ -91,7 +101,8 @@ benchmark <- function(
     ddqc_path,           # path to output ddqc labels 
     ensembleKQC_path,    # path to output ensembleKQC labels 
     view_plot = FALSE,   # whether to display miQC plot (feature vs mito percent)
-    output_path          # where all outputs are saved 
+    output_plot = FALSE,  # output final strategy comparison plots
+    output_path = "./C_Test_Strategies/data/benchmark_output"   # Can be altered       
     
 ){
   
@@ -170,6 +181,9 @@ benchmark <- function(
   # Run damaged detection & ignore empty droplets 
   dcresultsDf <- identify_damaged_cells(nf_umi_ed_ct = dcDf)
   seurat$DropletQC <- dcresultsDf$df$cell_status[match(rownames(dcresultsDf$df), rownames(seurat@meta.data))]
+  
+  # Two versions of DropletQC, one leaving empty droplets in & other not 
+  seurat$DropletQC_empty <- seurat$DropletQC
   seurat$DropletQC <- ifelse(seurat$DropletQC == "damaged_cell", "damaged", "cell")
   
   
@@ -245,6 +259,7 @@ benchmark <- function(
     if (!is.null(model_method)) { best_model_type <- model_method }
     
     # Subset based on the selected model
+    message("\nTool 4: miQC ...    ", best_model_type)
     sce_subset <- filterCells(sce, results[[best_model_type]]$model) 
     miQC <- colnames(sce_subset) 
     seurat$miQC <- ifelse(rownames(seurat@meta.data) %in% miQC, "cell", "damaged")
@@ -252,7 +267,6 @@ benchmark <- function(
     # Optional: plot metrics if required
     if (view_plot) { print(plotMetrics(sce)) }
     
-    message("\nTool 4: miQC ...    ", best_model_type)
     
   } else {
     
@@ -266,7 +280,8 @@ benchmark <- function(
   }
   
   # Tool 5: scater -------
-  
+  ??scater
+  message("")
   message("Tool 5: scater ...")
   
   # Like miQC, scater requires single cell experiment object (sce) input 
@@ -310,11 +325,13 @@ benchmark <- function(
   
   # Manual methods 
   
-  # Extract df and add cell barcode column 
+  # Manual 1: Mito fixed threshold ------
+  seurat$manual_fixed_mito <- ifelse(seurat$mt.percent > 10, "damaged", "cell")
+  
+  # Preparation for outlier-based manual methods 
+  # Extract df, add cell barcode identifies, & transform library size values for better Mahalanobis distance calculations 
   seurat_df <- seurat@meta.data
   seurat_df$barcodes <- rownames(seurat_df)
-
-  # Transform values for robust outlier detection 
   seurat_df$nCount_RNA <- log10(seurat_df$nCount_RNA)
   seurat_df$nFeature_RNA <- log10(seurat_df$nFeature_RNA)
   
@@ -325,20 +342,18 @@ benchmark <- function(
     
   }
   
-
   # Helper function for detecting multivariate outliers 
   identify_moutliers <- function(df){
     
-    # Compute robust covariance matrix using the MCD (Minimum Covariance Determinant) method
+    # Robust covariance matrix using the MCD (Minimum Covariance Determinant) method
     mcd_result <- covMcd(df)
     
-
     # Calculate robust Mahalanobis distances
     mahalanobis_distances <- mahalanobis(df, center = mcd_result$center, cov = mcd_result$cov)
     
     # Define a threshold for outliers (Chi-square distribution with degrees of freedom = # columns)
     threshold <- qchisq(0.975, df = ncol(df)) # 97.5% quantile of Chi-square distribution
-    outliers <- mahalanobis_distances > (threshold + (threshold / 2) )
+    outliers <- mahalanobis_distances > (threshold + (threshold / 1.5) ) # More lenient than mahalanobis_distances > threshold
     
     # View the results
     df_results <- data.frame(barcodes = rownames(df), mahalanobis_distances, outliers)
@@ -347,67 +362,122 @@ benchmark <- function(
     return(df_results)
     
   }
-    
-  # Manual 1: All multivariate outliers (robustbase): UMI and feature counts & mitochondrial, ribosomal and MALAT1 percentages -------
-  
-  message("Manual methods ...")
-  
-  # Define input df, run outlier detection, and add to Seurat meta data 
-  manual1_df <- seurat_df[, c("nCount_RNA", "nFeature_RNA", "mt.percent", "rb.percent", "malat1.percent")]
-  manual1_results <- identify_moutliers(manual1_df)
-  seurat$manual_all <- manual1_results$outliers
-  
-  # Correct for NA if needed
-  seurat$manual_all <- ifelse(is.na(seurat$manual_all), "cell", seurat$manual_all)
-  
-  # Manual 2: Mito/Ribo multivariate outliers (robustbase): UMI and feature counts & mitochondrial and ribosomal percentages -------
-  
-  manual2_df <- seurat_df[, c("nCount_RNA", "nFeature_RNA", "mt.percent", "rb.percent")]
-  manual2_results <- identify_moutliers(manual2_df)
-  seurat$manual_mito_ribo <- manual2_results$outliers
- 
-  
-  # Manual 3: Mito multivariate outliers (robustbase): UMI and feature counts & mitochondrial percentage -------
-  
-  manual3_df <- seurat_df[, c("nCount_RNA", "nFeature_RNA", "mt.percent")]
-  manual3_results <- identify_moutliers(manual3_df)
-  seurat$manual_mito <- manual3_results$outliers
-  
-  # Manual 4: MALAT1 multivariate outliers (robustbase): UMI and feature counts & MALAT1 percentage -------
-  
-  manual4_df <- seurat_df[, c("malat1.percent", "mt.percent")]
-  manual4_results <- identify_moutliers(manual4_df)
-  seurat$manual_malat1 <- manual4_results$outliers
-  
-  # Correct for NA if needed
-  seurat$manual_malat1 <- ifelse(is.na(seurat$manual_malat1), "cell", seurat$manual_malat1)
   
   
-  # Manual 5: Mito univariate outliers (MAD) ------
+  # Manual 2: Mito univariate outliers (MAD) ------
   
-  manual5_df  <- seurat_df[, c("mt.percent")]
+  # Use median and MAD to define threshold 
+  uni_mito_df  <- seurat_df[, c("mt.percent")]
+  median_mito <- median(uni_mito_df , na.rm = TRUE)
+  mad_mito <- mad(uni_mito_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
+  threshold_upper <- median_mito + 6 * mad_mito
+  outliers_mito <- uni_mito_df  > threshold_upper 
   
-  # Calculate the median and MAD 
-  median_mito <- median(manual5_df, na.rm = TRUE)
-  mad_mito <- mad(manual5_df, constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
+  # Use threshold to find outliers 
+  uni_mito_df  <- as.data.frame(seurat_df[, c("mt.percent")])
+  rownames(uni_mito_df ) <- rownames(seurat_df)
+  uni_mito_results <- data.frame(barcodes = rownames(uni_mito_df), outliers = outliers_mito)
+  uni_mito_results$outliers <- ifelse(uni_mito_results$outliers == "TRUE", "damaged", "cell")
   
-  # Define the threshold for outliers as 3 times the MAD 
-  threshold_upper <- median_mito + 3 * mad_mito
-  outliers_mito <- manual5_df > threshold_upper 
+  # Add outlier labels to cells in the seurat object 
+  seurat$manual_adaptive_mito <- uni_mito_results$outliers
   
-  manual5_df  <- as.data.frame(seurat_df[, c("mt.percent")])
-  rownames(manual5_df) <- rownames(seurat_df)
-  manual5_results <- data.frame(barcodes = rownames(manual5_df), outliers = outliers_mito)
-  manual5_results$outliers <- ifelse(manual5_results$outliers == "TRUE", "damaged", "cell")
-
-  # Add to seurat object 
-  seurat$manual_mito_isolated <- manual5_results$outliers
+  
+  # Manual 3: Mito/Ribo intersecting outliers (MAD): mitochondrial and ribosomal percentages -------
+  
+  # Use the mito threshold but adjust so that only cells that are also MAD outliers for rb.percent are included 
+  
+  # Use median and MAD to define threshold 
+  uni_ribo_df  <- seurat_df[, c("rb.percent")]
+  median_ribo <- median(uni_ribo_df , na.rm = TRUE)
+  mad_ribo <- mad(uni_ribo_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
+  threshold_lower <- median_ribo - 3 * mad_ribo
+  outliers_ribo <- uni_ribo_df  < threshold_lower
+  
+  # Use threshold to find outliers 
+  uni_ribo_df  <- as.data.frame(seurat_df[, c("rb.percent")])
+  rownames(uni_ribo_df ) <- rownames(seurat_df)
+  uni_ribo_results <- data.frame(barcodes = rownames(uni_ribo_df), outliers = outliers_ribo)
+  uni_ribo_results$outliers <- ifelse(uni_ribo_results$outliers == "TRUE", "damaged", "cell")
+  
+  # Add ribo's to adjust mito outlier 
+  seurat$manual_mito_ribo <- uni_ribo_results$outliers
+  seurat$manual_mito_ribo <- ifelse(seurat$manual_adaptive_mito == "damaged" & seurat$manual_mito_ribo == "damaged", "damaged", "cell")
+  
+  
+  # Manual 4: Mito/Ribo/UMI/feature intersecting outliers (MAD) -------
+  
+  # Use median and MAD to define threshold 
+  uni_count_df  <- seurat_df[, c("nCount_RNA")]
+  median_count <- median(uni_count_df , na.rm = TRUE)
+  mad_count <- mad(uni_count_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
+  threshold_lower <- median_count - 3 * mad_count
+  outliers_count <- uni_count_df  < threshold_lower
+  
+  # Use threshold to find outliers 
+  uni_count_df  <- as.data.frame(seurat_df[, c("nCount_RNA")])
+  rownames(uni_count_df ) <- rownames(seurat_df)
+  uni_count_results <- data.frame(barcodes = rownames(uni_count_df), outliers = outliers_count)
+  uni_count_results$outliers <- ifelse(uni_count_results$outliers == "TRUE", "damaged", "cell")
+  
+  # Add ribo's to adjust mito outlier 
+  seurat$manual_mito_ribo_umi <- uni_count_results$outliers
+  seurat$manual_mito_ribo_umi <- ifelse(seurat$manual_mito_ribo == "damaged" & seurat$manual_mito_ribo_umi == "damaged", "damaged", "cell")
+  
+  # Repeat for features
+  uni_feature_df  <- seurat_df[, c("nFeature_RNA")]
+  median_feature <- median(uni_feature_df , na.rm = TRUE)
+  mad_feature <- mad(uni_feature_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
+  threshold_lower <- median_feature - 3 * mad_feature
+  outliers_feature <- uni_feature_df  < threshold_lower
+  
+  # Use threshold to find outliers 
+  uni_feature_df  <- as.data.frame(seurat_df[, c("nFeature_RNA")])
+  rownames(uni_feature_df ) <- rownames(seurat_df)
+  uni_feature_results <- data.frame(barcodes = rownames(uni_feature_df), outliers = outliers_feature)
+  uni_feature_results$outliers <- ifelse(uni_feature_results$outliers == "TRUE", "damaged", "cell")
+  
+  # Add ribo's to adjust mito outlier 
+  seurat$manual_mito_ribo_feature <- uni_feature_results$outliers
+  seurat$manual_mito_ribo_library <- ifelse(seurat$manual_mito_ribo_umi == "damaged" & seurat$manual_mito_ribo_feature == "damaged", "damaged", "cell")
+  
+  
+  
+  
+  # Manual 5: UMI/feature intersecting outliers (MAD) -------
+  
+  # Isolated for count and feature outliers 
+  seurat$manual_umi <- uni_count_results$outliers
+  seurat$manual_feature <- uni_feature_results$outliers
+  seurat$manual_library <- ifelse(seurat$manual_umi == "damaged" & seurat$manual_feature == "damaged", "damaged", "cell")
+  
+  # Manual 6: MALAT1 univariate outliers (MAD) ------
+  
+  # Use median and MAD to define threshold 
+  uni_malat1_df  <- seurat_df[, c("malat1.percent")]
+  median_malat1 <- median(uni_malat1_df , na.rm = TRUE)
+  mad_malat1 <- mad(uni_malat1_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
+  threshold_upper <- median_mito + 6 * mad_malat1
+  outliers_malat1 <- uni_malat1_df  > threshold_upper 
+  
+  # Use threshold to find outliers 
+  uni_malat1_df  <- as.data.frame(seurat_df[, c("malat1.percent")])
+  rownames(uni_malat1_df) <- rownames(seurat_df)
+  uni_malat1_results <- data.frame(barcodes = rownames(uni_malat1_df), outliers = outliers_malat1)
+  uni_malat1_results$outliers <- ifelse(uni_malat1_results$outliers == "TRUE", "damaged", "cell")
+  
+  # Add outlier labels to cells in the seurat object 
+  seurat$manual_malat1 <- uni_malat1_results$outliers
+  
+  # Manual 7: MALAT1/Mito/Ribo intersecting outliers (MAD) ----
+  
+  # Adjusting the MALAT1 predictions by other measures 
+  seurat$manual_malat1_mito_ribo <- ifelse(seurat$manual_malat1 == "damaged" & seurat$manual_mito_ribo == "damaged", "damaged", "cell")
   
   
   # Return output -------
   
   # Call helper function 
-  
   final_df <- summarise_results(seurat = seurat)
 
   write.csv(final_df, 
@@ -420,16 +490,15 @@ benchmark <- function(
             quote = FALSE, 
             row.names = TRUE) 
   
-  saveRDS(seurat, 
-          paste0(output_path, "/", project_name, "_backup.csv"))
-  
   
   # Plot the output -------
   
   # Call helper function
+  if (output_plot){
   plot <- BenchPlot(seurat, 
                     output_file = paste0(output_path, "/", project_name, ".png"), 
                     organism)
+  }
   
   message("Complete!", "\n")
   
@@ -439,77 +508,106 @@ benchmark <- function(
 }
 
 
+
 #-------------------------------------------------------------------------------
-# FUNCTION RUN 
+# FUNCTION RUNNING
 #-------------------------------------------------------------------------------
+
+
+# Ground truth 
+GM18507_dead <- benchmark(seurat = GM18507_dead, 
+                          project_name = "GM18507_dead",
+                          model_method = "linear",
+                          ddqc_path = "./C_Test_Strategies/data/ddqc_output/GM18507_dead.csv", 
+                          ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/GM18507dead.csv")
+
+
+GM18507_dying <- benchmark(seurat = GM18507_dying, 
+                           project_name = "GM18507_dying",
+                           ddqc_path = "./C_Test_Strategies/data/ddqc_output/GM18507_dying.csv", 
+                           ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/GM18507dying.csv")
+
+
+HEK293_apo <-  benchmark(seurat = HEK293_apo , 
+                         project_name = "HEK293_apo",
+                         model_method = "polynomial",
+                         ddqc_path = "./C_Test_Strategies/data/ddqc_output/HEK293_apo.csv", 
+                         ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/HEK293apo.csv")
+
+
+HEK293_pro <-  benchmark(seurat = HEK293_pro, 
+                         project_name = "HEK293_pro",
+                         model_method = "one-dimensional",
+                         ddqc_path = "./C_Test_Strategies/data/ddqc_output/HEK293_apo.csv", 
+                         ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/HEK293pro.csv")
+
+
+PDX_dead <- benchmark(seurat = PDX_dead, 
+                      project_name = "PDX_dead",
+                      model_method = "linear",
+                      ddqc_path = "./C_Test_Strategies/data/ddqc_output/PDX_dead.csv", 
+                      ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/PDX.csv")
+
+
 
 # Cell lines 
 A549 <- benchmark(seurat = A549,
                   project_name = "A549",
                   model_method = "linear",
-                  ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/A549.csv",
-                  ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/A549_input.csv",
-                  output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                  ddqc_path = "./C_Test_Strategies/data/ddqc_output/A549.csv",
+                  ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/A549_input.csv")
 
 HCT116 <- benchmark(seurat = HCT116,
                   project_name = "HCT116",
-                  ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/HCT116.csv",
-                  ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/HCT116_input.csv",
-                  output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                  ddqc_path = "./C_Test_Strategies/data/ddqc_output/HCT116.csv",
+                  ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/HCT116_input.csv")
 
 Jurkat <- benchmark(seurat = Jurkat,
                   project_name = "Jurkat",
                   # model_method = "linear",
-                  ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/jurkat.csv",
-                  ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/jurkat_input.csv",
-                  output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                  ddqc_path = "./C_Test_Strategies/data/ddqc_output/jurkat.csv",
+                  ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/jurkat_input.csv")
 
 
 # Diseased 
 dLiver <- benchmark(seurat = dLiver,
                     project_name = "dLiver",
-                    # model_method = "linear",
-                    ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/dLiver.csv",
-                    ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/dLiver_input.csv",
-                    output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                    model_method = "linear", # 1714 / 1733
+                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/dLiver.csv",
+                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/dLiver_input.csv")
 
 
 dLung <- benchmark(seurat = dLung,
                     project_name = "dLung",
                     # model_method = "linear",
-                    ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/dLung.csv",
-                    ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/dLung_input.csv",
-                    output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/dLung.csv",
+                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/dLung_input.csv")
 
 dPBMC <- benchmark(seurat = dPBMC,
                     project_name = "dPBMC",
                     # model_method = "linear",
-                    ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/dPBMC.csv",
-                    ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/dPBMC_input.csv",
-                    output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                    ddqc_path = "./C_Test_Strategies/data//ddqc_output/dPBMC.csv",
+                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/dPBMC_input.csv")
 
 # Healthy 
 hLiver <- benchmark(seurat = hLiver,
                     project_name = "hLiver",
                     model_method = "one-dimensional",
-                    ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/hLiver.csv",
-                    ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/hLiver_input.csv",
-                    output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/hLiver.csv",
+                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/hLiver_input.csv")
 
 
 hLung <- benchmark(seurat = hLung,
                    project_name = "hLung",
                    # model_method = "linear",
-                   ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/hLung.csv",
-                   ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/hLung_input.csv",
-                   output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/hLung.csv",
+                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/hLung_input.csv")
 
 hPBMC <- benchmark(seurat = hPBMC,
                    project_name = "hPBMC",
                    # model_method = "linear",
-                   ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/hPBMC.csv",
-                   ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/hPBMC_input.csv",
-                   output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/hPBMC.csv",
+                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/hPBMC_input.csv")
 
 
 # Mouse 
@@ -517,98 +615,55 @@ mLiver <- benchmark(seurat = mLiver,
                     project_name = "mLiver",
                     # model_method = "linear",
                     organism = "Mmus",
-                    ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/mLiver.csv",
-                    ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/mLiver.csv",
-                    output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
-
+                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/mLiver.csv",
+                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/mLiver.csv")
 
 mLung <- benchmark(seurat = mLung,
                    project_name = "mLung",
                    # model_method = "linear",
                    organism = "Mmus",
-                   ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/mLung.csv",
-                   ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/mLung.csv",
-                   output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/mLung.csv",
+                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/mLung.csv")
 
 mPBMC <- benchmark(seurat = mPBMC,
                    project_name = "mPBMC",
                    # model_method = "linear",
                    organism = "Mmus",
-                   ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/mPBMC.csv",
-                   ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/mPBMC.csv",
-                   output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/mPBMC.csv",
+                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/mPBMC.csv")
 
 
-# Tumour isolates 
+# Tumor isolates 
 ductal <- benchmark(seurat = ductal,
                    project_name = "ductal",
                    model_method = "linear",
-                   ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/ductal.csv",
-                   ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/ductal_input.csv",
-                   output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/ductal.csv",
+                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/ductal_input.csv")
 
 glio <- benchmark(seurat = glio,
                     project_name = "glio",
                     # model_method = "linear",
-                    ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/glio.csv",
-                    ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/glio_input.csv",
-                    output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/glio.csv",
+                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/glio_input.csv")
 
 hodgkin <- benchmark(seurat = hodgkin,
                     project_name = "hodgkin",
                     model_method = "linear",
-                    ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/hodgkin.csv",
-                    ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/hodgkin_input.csv",
-                    output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
+                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/hodgkin.csv",
+                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/hodgkin_input.csv")
 
 
-# Ground truth 
-GM18507_dead <- benchmark(seurat = GM18507_dead, 
-                          project_name = "GM18507_dead",
-                          ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/GM18507_dead.csv", 
-                          ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/GM18507dead.csv",
-                          output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
-  
-GM18507_dying <- benchmark(seurat = GM18507_dying, 
-                          project_name = "GM18507_dying",
-                          ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/GM18507_dying.csv", 
-                          ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/GM18507dying.csv",
-                          output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
-
-
-HEK293_apo <-  benchmark(seurat = HEK293_apo , 
-                         project_name = "HEK293_apo",
-                         model_method = "polynomial",
-                         ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/HEK293_apo.csv", 
-                         ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/HEK293apo.csv",
-                         output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
-
-  
-HEK293_pro <-  benchmark(seurat = HEK293_pro, 
-                         project_name = "HEK293_pro",
-                         #model_method = "one-dimensional",
-                         ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/HEK293_apo.csv", 
-                         ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/HEK293pro.csv",
-                         output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
-
-
-PDX_dead <- benchmark(seurat = PDX_dead, 
-                      project_name = "PDX_dead",
-                      model_method = "linear",
-                      ddqc_path = "/home/alicen/Projects/ReviewArticle/python/ddqc_output/PDX_dead.csv", 
-                      ensembleKQC_path = "/home/alicen/Projects/ReviewArticle/python/EnsembleKQC_output/PDX.csv",
-                      output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results")
 
 #-------------------------------------------------------------------------------
 # SampleQC 
 #-------------------------------------------------------------------------------
 
-# Saving function ----
+# Define helper functions ----
 
 save_sampleQC <- function(seurat, 
                           project_name, 
                           organism, 
-                          output_path = "/home/alicen/Projects/ReviewArticle/benchmark_results/"){
+                          output_path =  "./C_Test_Strategies/data/benchmark_output"){
   
   # Save meta data 
   write.csv(seurat@meta.data, 
@@ -617,9 +672,7 @@ save_sampleQC <- function(seurat,
             row.names = TRUE) 
   
   # Save summarised results 
-  final_df <- summarise_results(seurat = seurat,
-                                methods = list("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater", "valiDrops", 
-                                     "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated"))
+  final_df <- summarise_results(seurat = seurat)
   
   write.csv(final_df, 
             paste0(output_path, "/", project_name, "_summary.csv"), 
@@ -627,15 +680,50 @@ save_sampleQC <- function(seurat,
             row.names = FALSE) 
   
   # Generate plot 
-  plot <- BenchPlot(seurat, 
-                    methods = c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops", 
-                                "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated"),
-                    output_file = paste0(output_path, "/", project_name, ".png"), 
-                    organism)
+  # plot <- BenchPlot(seurat, 
+  #                   methods = c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops", 
+  #                               "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated"),
+  #                   output_file = paste0(output_path, "/", project_name, ".png"), 
+  #                   organism)
 
 }  
   
-  
+runSampleQC <- function(seurat){
+    
+    # Create SampleQC dataframe using default function 
+    qc_dt = make_qc_dt(seurat@meta.data, 
+                       sample_var  = 'orig.ident', 
+                       qc_names    = c('log_counts', 'log_feats', 'logit_mito'),
+                       annot_vars  = NULL
+    )
+    
+    
+    
+    # which QC metrics do we want to use?
+    qc_names    = c('log_counts', 'log_feats', 'logit_mito')
+    annots_disc = 'orig.ident' # discrete variables 
+    annots_cont = NULL # continuous variables 
+    
+    # Use dimensionality reduction to calculate distances between groups
+    qc_obj    = calc_pairwise_mmds(qc_dt, 
+                                   one_group_only = TRUE,
+                                   qc_names, 
+                                   annots_disc = annots_disc, 
+                                   annots_cont = annots_cont, 
+                                   n_cores = 4)# Fit each grouping 
+    
+    qc_obj = fit_sampleqc(qc_obj, K_list = rep(1, get_n_groups(qc_obj)))
+    outliers_dt = get_outliers(qc_obj)
+    
+    # Transfer outlier label (TRUE -> "damaged", FALSE -> "cell")
+    seurat$SampleQC <- outliers_dt$outlier
+    seurat$SampleQC <- ifelse(seurat$SampleQC == "TRUE", "damaged", "cell")
+    
+    return(seurat)
+    
+  }
+
+
 # SampleQC for each collection of samples -----
 
 # Create a single object for each group 
@@ -662,39 +750,13 @@ non_groundtruth <- merge(x = A549,
 groundtruth$percent.mt <- groundtruth$mt.percent
 non_groundtruth$percent.mt <- non_groundtruth$mt.percent
 
-
-# Create SampleQC dataframe using default function 
-qc_dt = make_qc_dt(non_groundtruth@meta.data, 
-                     sample_var  = 'orig.ident', 
-                     qc_names    = c('log_counts', 'log_feats', 'logit_mito'),
-                     annot_vars  = NULL
-)
-
-
-
-# which QC metrics do we want to use?
-qc_names    = c('log_counts', 'log_feats', 'logit_mito')
-annots_disc = 'orig.ident' # discrete variables 
-annots_cont = NULL # continuous variables 
-
-# Use dimensionality reduction to calculate distances between groups
-qc_obj    = calc_pairwise_mmds(qc_dt, 
-                               one_group_only = TRUE,
-                               qc_names, 
-                               annots_disc = annots_disc, 
-                               annots_cont = annots_cont, 
-                               n_cores = 4)# Fit each grouping 
-
-qc_obj = fit_sampleqc(qc_obj, K_list = rep(1, get_n_groups(qc_obj)))
-outliers_dt = get_outliers(qc_obj)
-
-# Transfer outlier label (TRUE -> "damaged", FALSE -> "cell")
-non_groundtruth$SampleQC <- outliers_dt$outlier
-non_groundtruth$SampleQC <- ifelse(non_groundtruth$SampleQC == "TRUE", "damaged", "cell")
-
+# Run the package on each collection 
+groundtruth <- runSampleQC(groundtruth)
+non_groundtruth <- runSampleQC(non_groundtruth)
 
 # Saving ----
 
+# Save non-groundtruth
 for (dataset in unique(non_groundtruth$orig.ident)){
   
   # Extract and save mouse samples 
@@ -714,7 +776,6 @@ for (dataset in unique(non_groundtruth$orig.ident)){
 }
   
 
-
 # Split up the joined object and save meta data 
 GM18507_dead <- subset(groundtruth, orig.ident %in% c("GM18507_dead", "GM18507_control"))
 GM18507_dying <- subset(groundtruth, orig.ident %in% c("GM18507_dying", "GM18507_control"))
@@ -722,7 +783,7 @@ HEK293_apoptotic <- subset(groundtruth, orig.ident %in% c("HEK293_apoptotic", "H
 HEK293_proapoptotic <- subset(groundtruth, orig.ident %in% c("HEK293_proapoptotic", "HEK293_control"))
 PDX_dead <- subset(groundtruth, orig.ident %in% c("PDX_dead", "PDX_control"))
 
-save_sampleQC(GM18507_dead, "GM18507_dead", organism = "Hsap")
+save_sampleQC(GM18507_dead, project_name = "GM18507_dead", organism = "Hsap")
 save_sampleQC(GM18507_dying, "GM18507_dying", organism = "Hsap")
 save_sampleQC(HEK293_apoptotic, "HEK293_apoptotic", organism = "Hsap")
 save_sampleQC(HEK293_proapoptotic, "HEK293_proapoptotic", organism = "Hsap")
