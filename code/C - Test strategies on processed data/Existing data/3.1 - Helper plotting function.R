@@ -7,7 +7,19 @@
 # OBTAIN LATEST ANNOTATIONS  
 #-------------------------------------------------------------------------------
 
+# library(BiocManager)
+# BiocManager::install("AnnotationHub")
+# BiocManager::install("ensembldb")
 library(AnnotationHub)
+# library(GenomicRanges)
+# library(ensembldb)
+
+# Update all Bioconductor packages
+#BiocManager::install(update = TRUE, ask = FALSE)
+
+# Install or update the ensembldb package
+#BiocManager::install("ensembldb", force = TRUE)
+library(ensembldb)
 
 # Gene annotations for  QC metrics -----
 
@@ -38,7 +50,7 @@ BenchPlot <- function(seurat,
                       output_file, 
                       organism = "Hsap", 
                       methods = c("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops", 
-                                  "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
+                                  "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library",  "manual_malat1", "manual_malat1_mito_ribo")
                       
                       ) {
   
@@ -195,3 +207,4 @@ BenchPlot <- function(seurat,
   
 }
 
+### End 
