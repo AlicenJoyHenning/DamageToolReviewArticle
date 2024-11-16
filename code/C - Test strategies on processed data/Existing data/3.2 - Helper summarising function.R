@@ -12,7 +12,7 @@
 
 summarise_results <- function(seurat, 
                               methods = list("ddqc", "DropletQC", "ensembleKQC", "miQC", "scater", "valiDrops", 
-                                          "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
+                                             "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library",  "manual_malat1", "manual_malat1_mito_ribo")
                               ){
   
   # Function to automate live and dead cell calculations for each method
@@ -52,3 +52,5 @@ summarise_results <- function(seurat,
   return(final_df)
   
 }
+
+### End
