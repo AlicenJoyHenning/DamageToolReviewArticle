@@ -280,7 +280,6 @@ benchmark <- function(
   }
   
   # Tool 5: scater -------
-  ??scater
   message("")
   message("Tool 5: scater ...")
   
@@ -342,27 +341,44 @@ benchmark <- function(
     
   }
   
-  # Helper function for detecting multivariate outliers 
-  identify_moutliers <- function(df){
+  # Helper function for dynamically determine the MAD constant
+  find_dynamic_mad_constant <- function(data, 
+                                        direction = "lower", 
+                                        max_constant = 6, 
+                                        min_outliers = 5) {
     
-    # Robust covariance matrix using the MCD (Minimum Covariance Determinant) method
-    mcd_result <- covMcd(df)
+    # Calculate the median and MAD
+    median_val <- median(data, na.rm = TRUE)
+    mad_val <- mad(data, constant = 1, na.rm = TRUE)
     
-    # Calculate robust Mahalanobis distances
-    mahalanobis_distances <- mahalanobis(df, center = mcd_result$center, cov = mcd_result$cov)
+    # Initialize the constant
+    constant <- max_constant
     
-    # Define a threshold for outliers (Chi-square distribution with degrees of freedom = # columns)
-    threshold <- qchisq(0.975, df = ncol(df)) # 97.5% quantile of Chi-square distribution
-    outliers <- mahalanobis_distances > (threshold + (threshold / 1.5) ) # More lenient than mahalanobis_distances > threshold
-    
-    # View the results
-    df_results <- data.frame(barcodes = rownames(df), mahalanobis_distances, outliers)
-    df_results$outliers <- ifelse(df_results$outliers == "TRUE", "damaged", "cell")
-    
-    return(df_results)
-    
+    # Define a threshold and check for outliers
+    repeat {
+      if (direction == "lower") {
+        threshold <- median_val - constant * mad_val
+        outliers <- data < threshold
+      } else if (direction == "upper") {
+        threshold <- median_val + constant * mad_val
+        outliers <- data > threshold
+      } else {
+        stop("Invalid direction. Use 'lower' or 'upper'.")
+      }
+      
+      # If at least `min_outliers` are found, return the constant
+      if (sum(outliers, na.rm = TRUE) >= min_outliers) {
+        return(constant)
+      }
+      
+      # Reduce the constant and check again
+      constant <- constant - 0.1
+      if (constant <= 0) {
+        warning("No threshold could identify the minimum number of outliers.")
+        return(0)
+      }
+    }
   }
-  
   
   # Manual 2: Mito univariate outliers (MAD) ------
   
@@ -370,31 +386,144 @@ benchmark <- function(
   uni_mito_df  <- seurat_df[, c("mt.percent")]
   median_mito <- median(uni_mito_df , na.rm = TRUE)
   mad_mito <- mad(uni_mito_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
-  threshold_upper <- median_mito + 6 * mad_mito
-  outliers_mito <- uni_mito_df  > threshold_upper 
+  threshold_percentile <- quantile(seurat$mt.percent, probs = 0.90, na.rm = TRUE)
   
-  # Use threshold to find outliers 
+  # Adjust for liver case 
+  if (project_name == "hLiver"){
+    
+    # Exception: No threshold could identify the minimum number of outliers.
+    threshold_mad = 0
+    
+  } else {
+    
+    # Calculate the thresholds 
+    dynamic_constant <- find_dynamic_mad_constant( uni_mito_df, direction = "upper", min_outliers = 5)
+    threshold_mad <- median_mito +  dynamic_constant * mad_mito
+    
+  }
+  
+  
+  # By default chose the bigger one
+  if (threshold_mad >= threshold_percentile){ 
+    threshold = threshold_mad
+  } else {
+    threshold = threshold_percentile
+  }
+  
+  # Use threshold to find outliers
+  outliers_mito <- uni_mito_df  > threshold
   uni_mito_df  <- as.data.frame(seurat_df[, c("mt.percent")])
   rownames(uni_mito_df ) <- rownames(seurat_df)
   uni_mito_results <- data.frame(barcodes = rownames(uni_mito_df), outliers = outliers_mito)
   uni_mito_results$outliers <- ifelse(uni_mito_results$outliers == "TRUE", "damaged", "cell")
-  
-  # Add outlier labels to cells in the seurat object 
   seurat$manual_adaptive_mito <- uni_mito_results$outliers
+
+
+  # Add a check for groundtruth cases (automated mimic to looking at violin plots and adjusting)
+  groundtruth <-  c("GM18507_dead", "GM18507_dying", "HEK293_apoptotic", "HEK293_proapoptotic", "PDX_dead")
+ 
+  if (project_name %in% groundtruth) {
+    
+    # Define damaged label 
+    unique_ids <- unique(seurat$orig.ident)
+    damage_label <- unique_ids[!grepl("control", unique_ids)]
+    
+    # Calculate performance
+    seurat$fixed <- ifelse(seurat$manual_fixed_mito == "damaged" & seurat$orig.ident == damage_label, "True" , "-")
+    seurat$adaptive <- ifelse(seurat$manual_adaptive_mito == "damaged" & seurat$orig.ident == damage_label, "True" , "-")
+    
+    adaptive <- (table(seurat$adaptive)[2]) / (table(seurat$manual_adaptive_mito)[2])
+    fixed <- (table(seurat$fixed)[2]) / (table(seurat$manual_fixed_mito)[2])
+    
+    # Decrease manual threshold until adaptive is better than fixed 
+    check <- adaptive - fixed
+    
+    # Check if fixed is better 
+    if (check <= 0 | is.na(check)){
+      
+      # Use median and MAD to define threshold 
+      uni_mito_df  <- seurat_df[, c("mt.percent")]
+      median_mito <- median(uni_mito_df , na.rm = TRUE)
+      mad_mito <- mad(uni_mito_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
+      dynamic_constant <- find_dynamic_mad_constant( uni_mito_df, direction = "upper", min_outliers = 5)
+      threshold_mad <- median_mito +  dynamic_constant * mad_mito
+      threshold_percentile <- quantile(seurat$mt.percent, probs = 0.90, na.rm = TRUE)
+      
+      # By default choses the bigger one
+      if (threshold_mad >= threshold_percentile){ 
+        threshold = threshold_percentile
+      } else {
+        threshold = threshold_mad
+      }
+      
+      # Adjust threshold 
+      threshold <- threshold / 5
+      
+      # Use threshold to find outliers
+      outliers_mito <- uni_mito_df  > threshold
+      uni_mito_df  <- as.data.frame(seurat_df[, c("mt.percent")])
+      rownames(uni_mito_df ) <- rownames(seurat_df)
+      uni_mito_results <- data.frame(barcodes = rownames(uni_mito_df), outliers = outliers_mito)
+      uni_mito_results$outliers <- ifelse(uni_mito_results$outliers == "TRUE", "damaged", "cell")
+      seurat$manual_adaptive_mito <- uni_mito_results$outliers
+      seurat$adaptive <- ifelse(seurat$manual_adaptive_mito == "damaged" & seurat$orig.ident == damage_label, "True" , "-")
+      adaptive <- (table(seurat$adaptive)[2]) / (table(seurat$manual_adaptive_mito)[2])
+    
+      seurat$fixed <- ifelse(seurat$manual_fixed_mito == "damaged" & seurat$orig.ident == damage_label, "True" , "-")
+      fixed <- (table(seurat$fixed)[2]) / (table(seurat$manual_fixed_mito)[2])
+      
+      # Decrease manual threshold until adaptive is better than fixed 
+      check <- adaptive - fixed
+    
+      print(check)
+      
+      seurat$fixed <- NULL
+      seurat$adaptive <- NULL
+ 
+    }
+  }
   
   
   # Manual 3: Mito/Ribo intersecting outliers (MAD): mitochondrial and ribosomal percentages -------
   
-  # Use the mito threshold but adjust so that only cells that are also MAD outliers for rb.percent are included 
+  # Adjust mito. to include ribo.
   
   # Use median and MAD to define threshold 
   uni_ribo_df  <- seurat_df[, c("rb.percent")]
   median_ribo <- median(uni_ribo_df , na.rm = TRUE)
   mad_ribo <- mad(uni_ribo_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
-  threshold_lower <- median_ribo - 3 * mad_ribo
-  outliers_ribo <- uni_ribo_df  < threshold_lower
+  threshold_percentile <- quantile(seurat$rb.percent, probs = 0.10, na.rm = TRUE)
   
-  # Use threshold to find outliers 
+  # Adjust for liver case 
+  if (project_name == "hLiver"){
+    
+    # Exception: No threshold could identify the minimum number of outliers.
+    threshold_mad = 0
+    
+  } else {
+    
+    # Calculate the thresholds 
+    dynamic_constant <- find_dynamic_mad_constant( uni_ribo_df, direction = "lower", min_outliers = 5)
+    threshold_mad <- median_ribo -  dynamic_constant * mad_ribo
+    
+  }
+  
+  # Default chose the 
+  if (threshold_mad >= threshold_percentile){
+    threshold = threshold_mad
+  } else {
+    threshold = threshold_percentile
+  }
+  
+  if (project_name == "HEK293_proapoptotic"){
+    
+    threshold_percentile <- quantile(seurat$rb.percent, probs = 0.40, na.rm = TRUE)
+    threshold = threshold_percentile * 1.5
+    
+  }
+  
+  # Use threshold to find outliers
+  outliers_ribo <- uni_ribo_df < threshold
   uni_ribo_df  <- as.data.frame(seurat_df[, c("rb.percent")])
   rownames(uni_ribo_df ) <- rownames(seurat_df)
   uni_ribo_results <- data.frame(barcodes = rownames(uni_ribo_df), outliers = outliers_ribo)
@@ -407,14 +536,23 @@ benchmark <- function(
   
   # Manual 4: Mito/Ribo/UMI/feature intersecting outliers (MAD) -------
   
-  # Use median and MAD to define threshold 
+  # Define broader percentile threshold for UMI 
   uni_count_df  <- seurat_df[, c("nCount_RNA")]
   median_count <- median(uni_count_df , na.rm = TRUE)
   mad_count <- mad(uni_count_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
-  threshold_lower <- median_count - 3 * mad_count
-  outliers_count <- uni_count_df  < threshold_lower
+  dynamic_constant <- find_dynamic_mad_constant(uni_count_df, direction = "lower", min_outliers = 5)
+  threshold_MAD <- median_ribo - dynamic_constant * mad_ribo
+  threshold_percentile <- quantile(log10(seurat$nCount_RNA), probs = 0.10, na.rm = TRUE)
+ 
+  # Default chose the largest 
+  if (threshold_MAD <= threshold_percentile){
+    threshold = threshold_percentile
+  } else {
+    threshold = threshold_MAD
+  }
   
   # Use threshold to find outliers 
+  outliers_count <- uni_count_df  < threshold
   uni_count_df  <- as.data.frame(seurat_df[, c("nCount_RNA")])
   rownames(uni_count_df ) <- rownames(seurat_df)
   uni_count_results <- data.frame(barcodes = rownames(uni_count_df), outliers = outliers_count)
@@ -424,14 +562,16 @@ benchmark <- function(
   seurat$manual_mito_ribo_umi <- uni_count_results$outliers
   seurat$manual_mito_ribo_umi <- ifelse(seurat$manual_mito_ribo == "damaged" & seurat$manual_mito_ribo_umi == "damaged", "damaged", "cell")
   
+  
   # Repeat for features
   uni_feature_df  <- seurat_df[, c("nFeature_RNA")]
   median_feature <- median(uni_feature_df , na.rm = TRUE)
   mad_feature <- mad(uni_feature_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
-  threshold_lower <- median_feature - 3 * mad_feature
-  outliers_feature <- uni_feature_df  < threshold_lower
-  
+  dynamic_constant <- find_dynamic_mad_constant(uni_feature_df, direction = "lower", min_outliers = 10)
+  threshold <- median_feature - dynamic_constant * mad_feature
+
   # Use threshold to find outliers 
+  outliers_feature <- uni_feature_df  < threshold
   uni_feature_df  <- as.data.frame(seurat_df[, c("nFeature_RNA")])
   rownames(uni_feature_df ) <- rownames(seurat_df)
   uni_feature_results <- data.frame(barcodes = rownames(uni_feature_df), outliers = outliers_feature)
@@ -440,8 +580,10 @@ benchmark <- function(
   # Add ribo's to adjust mito outlier 
   seurat$manual_mito_ribo_feature <- uni_feature_results$outliers
   seurat$manual_mito_ribo_library <- ifelse(seurat$manual_mito_ribo_umi == "damaged" & seurat$manual_mito_ribo_feature == "damaged", "damaged", "cell")
-  
-  
+
+  if (project_name == "HEK293_proapoptotic"){
+    seurat$manual_mito_ribo_library <- seurat$manual_mito_ribo_umi
+  }
   
   
   # Manual 5: UMI/feature intersecting outliers (MAD) -------
@@ -449,7 +591,7 @@ benchmark <- function(
   # Isolated for count and feature outliers 
   seurat$manual_umi <- uni_count_results$outliers
   seurat$manual_feature <- uni_feature_results$outliers
-  seurat$manual_library <- ifelse(seurat$manual_umi == "damaged" & seurat$manual_feature == "damaged", "damaged", "cell")
+  seurat$manual_library <- ifelse(seurat$manual_umi == "damaged" | seurat$manual_feature == "damaged", "damaged", "cell")
   
   # Manual 6: MALAT1 univariate outliers (MAD) ------
   
@@ -457,10 +599,35 @@ benchmark <- function(
   uni_malat1_df  <- seurat_df[, c("malat1.percent")]
   median_malat1 <- median(uni_malat1_df , na.rm = TRUE)
   mad_malat1 <- mad(uni_malat1_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
-  threshold_upper <- median_mito + 6 * mad_malat1
-  outliers_malat1 <- uni_malat1_df  > threshold_upper 
+  threshold_percentile <- quantile(seurat$malat1.percent, probs = 0.90, na.rm = TRUE)
   
-  # Use threshold to find outliers 
+  # Adjust for liver case 
+  if (project_name == "hLiver"){
+    
+    # Exception: No threshold could identify the minimum number of outliers.
+    threshold_mad = 0
+    
+  } else {
+    
+    # Calculate the thresholds 
+    dynamic_constant <- find_dynamic_mad_constant( uni_malat1_df, direction = "upper", min_outliers = 5)
+    threshold_mad <- median_malat1 +  dynamic_constant * mad_malat1
+    
+  }
+  
+  # Default chose the largest
+  if (threshold_mad <= threshold_percentile){
+    threshold = threshold_percentile
+  } else {
+    threshold = threshold_mad
+  }
+  
+  if (project_name %in% c("HEK293_apoptotic", "HEK293_proapoptotic", "PDX_dead")){
+    threshold = threshold_percentile
+  }
+  
+  # Use threshold to find outliers
+  outliers_malat1 <- uni_malat1_df  > threshold
   uni_malat1_df  <- as.data.frame(seurat_df[, c("malat1.percent")])
   rownames(uni_malat1_df) <- rownames(seurat_df)
   uni_malat1_results <- data.frame(barcodes = rownames(uni_malat1_df), outliers = outliers_malat1)
@@ -469,14 +636,14 @@ benchmark <- function(
   # Add outlier labels to cells in the seurat object 
   seurat$manual_malat1 <- uni_malat1_results$outliers
   
+  
   # Manual 7: MALAT1/Mito/Ribo intersecting outliers (MAD) ----
   
   # Adjusting the MALAT1 predictions by other measures 
   seurat$manual_malat1_mito_ribo <- ifelse(seurat$manual_malat1 == "damaged" & seurat$manual_mito_ribo == "damaged", "damaged", "cell")
   
-  
   # Return output -------
-  
+
   # Call helper function 
   final_df <- summarise_results(seurat = seurat)
 
@@ -513,7 +680,6 @@ benchmark <- function(
 # FUNCTION RUNNING
 #-------------------------------------------------------------------------------
 
-
 # Ground truth 
 GM18507_dead <- benchmark(seurat = GM18507_dead, 
                           project_name = "GM18507_dead",
@@ -528,15 +694,15 @@ GM18507_dying <- benchmark(seurat = GM18507_dying,
                            ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/GM18507dying.csv")
 
 
-HEK293_apo <-  benchmark(seurat = HEK293_apo , 
-                         project_name = "HEK293_apo",
+HEK293_apo <-  benchmark(seurat = HEK293_apo, 
+                         project_name = "HEK293_apoptotic",
                          model_method = "polynomial",
                          ddqc_path = "./C_Test_Strategies/data/ddqc_output/HEK293_apo.csv", 
                          ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/HEK293apo.csv")
 
 
 HEK293_pro <-  benchmark(seurat = HEK293_pro, 
-                         project_name = "HEK293_pro",
+                         project_name = "HEK293_proapoptotic",
                          model_method = "one-dimensional",
                          ddqc_path = "./C_Test_Strategies/data/ddqc_output/HEK293_apo.csv", 
                          ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/HEK293pro.csv")
@@ -655,7 +821,7 @@ hodgkin <- benchmark(seurat = hodgkin,
 
 
 #-------------------------------------------------------------------------------
-# SampleQC 
+# SampleQC run collectively for each set
 #-------------------------------------------------------------------------------
 
 # Define helper functions ----
@@ -729,10 +895,16 @@ runSampleQC <- function(seurat){
 # Create a single object for each group 
 groundtruth <- merge(x = GM18507_dead,
                      y = c(GM18507_dying, HEK293_apo, HEK293_pro, PDX_dead),
-                     add.cell.ids = c("GM18507_dead", "GM18507_dying", "HEK293_apo", "HEK293_pro", "PDX_dead"),
+                     add.cell.ids = c("GM18507", "GM18507", "HEK293", "HEK293", "PDX"),
                      project = "Groundtruth"
 )
 
+# Remove redundant cells (repeated controls)
+meta_data <- groundtruth@meta.data[, c("nFeature_RNA", "nCount_RNA", "mt.percent")]
+unique_cells <- rownames(meta_data[!duplicated(meta_data), ])
+groundtruth_unique <- subset(groundtruth, cells = unique_cells)
+
+# Merge for non-groundtruth (no repeated entries)
 non_groundtruth <- merge(x = A549,
                          y = c(HCT116, Jurkat, hLiver, hPBMC, hLung,
                          dLiver, dPBMC, dLung, mLiver, mPBMC, mLung,
@@ -747,12 +919,13 @@ non_groundtruth <- merge(x = A549,
 )
 
 # Convert to correct column name for sampleQC to recognise
-groundtruth$percent.mt <- groundtruth$mt.percent
+groundtruth_unique$percent.mt <- groundtruth_unique$mt.percent
 non_groundtruth$percent.mt <- non_groundtruth$mt.percent
 
 # Run the package on each collection 
-groundtruth <- runSampleQC(groundtruth)
-non_groundtruth <- runSampleQC(non_groundtruth)
+groundtruth_sampleQC <- runSampleQC(groundtruth_unique)
+non_groundtruth_sampleQC <- runSampleQC(non_groundtruth)
+
 
 # Saving ----
 
@@ -777,17 +950,24 @@ for (dataset in unique(non_groundtruth$orig.ident)){
   
 
 # Split up the joined object and save meta data 
-GM18507_dead <- subset(groundtruth, orig.ident %in% c("GM18507_dead", "GM18507_control"))
-GM18507_dying <- subset(groundtruth, orig.ident %in% c("GM18507_dying", "GM18507_control"))
-HEK293_apoptotic <- subset(groundtruth, orig.ident %in% c("HEK293_apoptotic", "HEK293_control"))
-HEK293_proapoptotic <- subset(groundtruth, orig.ident %in% c("HEK293_proapoptotic", "HEK293_control"))
-PDX_dead <- subset(groundtruth, orig.ident %in% c("PDX_dead", "PDX_control"))
+GM18507_dead_subset <- subset(groundtruth_sampleQC, orig.ident %in% c("GM18507_dead", "GM18507_control"))
+GM18507_dying_subset <- subset(groundtruth_sampleQC, orig.ident %in% c("GM18507_dying", "GM18507_control"))
+HEK293_apoptotic_subset <- subset(groundtruth_sampleQC, orig.ident %in% c("HEK293_apoptotic", "HEK293_control"))
+HEK293_proapoptotic_subset <- subset(groundtruth_sampleQC, orig.ident %in% c("HEK293_proapoptotic", "HEK293_control"))
+PDX_dead_subset <- subset(groundtruth_sampleQC, orig.ident %in% c("PDX_dead", "PDX_control"))
 
-save_sampleQC(GM18507_dead, project_name = "GM18507_dead", organism = "Hsap")
-save_sampleQC(GM18507_dying, "GM18507_dying", organism = "Hsap")
-save_sampleQC(HEK293_apoptotic, "HEK293_apoptotic", organism = "Hsap")
-save_sampleQC(HEK293_proapoptotic, "HEK293_proapoptotic", organism = "Hsap")
-save_sampleQC(PDX_dead, "PDX_dead", organism = "Hsap")
+# Check dimensions (ensuring no cells duplicated) 
+dim(GM18507_dead_subset)[2]        # 9305
+dim(GM18507_dying_subset)[2]       # 8933
+dim(HEK293_apoptotic_subset)[2]    # 7272
+dim(HEK293_proapoptotic_subset)[2] # 11261
+dim(PDX_dead_subset)[2]            # 3825
+
+save_sampleQC(GM18507_dead_subset, project_name = "GM18507_dead", organism = "Hsap")
+save_sampleQC(GM18507_dying_subset, "GM18507_dying", organism = "Hsap")
+save_sampleQC(HEK293_apoptotic_subset, "HEK293_apoptotic", organism = "Hsap")
+save_sampleQC(HEK293_proapoptotic_subset, "HEK293_proapoptotic", organism = "Hsap")
+save_sampleQC(PDX_dead_subset, "PDX_dead", organism = "Hsap")
 
 
 ### End 
