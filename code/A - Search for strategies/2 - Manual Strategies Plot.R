@@ -81,14 +81,14 @@ ggsave("./A_Search_Strategies/img/included_pie_chart.png",
        plot = methods_included_plot, width = 5, height = 5, units = "in", dpi = 300, bg = "transparent")
 
 
-
 #-------------------------------------------------------------------------------
 # OF ALL PRESENT STRATEGIES 
 #-------------------------------------------------------------------------------
 
 # Of those where the method is specified, what are predominant methods? 
+
 # Filter the data frame to include only rows where Included is "Yes"
-df_yes <- df %>% filter(Included == "Yes")
+df_yes <- df %>% dplyr::filter(Included == "Yes")
 
 # Prepare data frame for plotting
 strategy_counts <- table(df_yes$Strategy)
@@ -111,8 +111,34 @@ ggsave("./A_Search_Strategies/img/methods_pie_chart.png",
        plot = methods_prevalence_plot, width = 5, height = 5, units = "in", dpi = 300, bg = "transparent")
 
 
+# Stacked bar plot with same results
+strategy_df$Count_inverse <- 63 - strategy_df$Count
 
-### End 
+# Order according to increasing count
+strategy_df$Strategy <- factor(strategy_df$Strategy, levels = strategy_df$Strategy[order(strategy_df$Count)])
+
+
+# Performance 
+# Reshape & ensure performance is plotted first
+data_long <- reshape2::melt(strategy_df, id.vars = "Strategy", measure.vars = c("Count", "Count_inverse"))
+data_long$variable <- factor(data_long$variable, levels = c("Count_inverse", "Count"))
+
+# Create the stacked bar graph
+strategy_ranks <- ggplot(data_long, aes(x = value, y = Strategy, fill = variable)) +
+  geom_bar(stat = "identity", width = 0.55) +
+  scale_fill_manual(values = c("Count" = "#001E5C", "Count_inverse" = "#E6E6E6")) +
+  theme_classic() + 
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.line = element_blank(),
+        legend.position = "none"
+  )
+
+ggsave("./A_Search_Strategies/img/methods_bar_chart.png", 
+       plot = strategy_ranks, width = 4, height = 3, units = "in", dpi = 300, bg = "transparent")
+
+
 
 #-------------------------------------------------------------------------------
 # OF MITO-CENTERED STRATEGIES
@@ -120,10 +146,8 @@ ggsave("./A_Search_Strategies/img/methods_pie_chart.png",
 
 # Of those where the method is specified, what are predominant methods? 
 # Filter the data frame to include only rows where Included is "Yes"
-df_mito <- df %>% filter(Threshold != "-")
+df_mito <- df %>% dplyr::filter(Threshold != "-")
 
-median(as.numeric(numbers$Threshold))
-mean(as.numeric(numbers$Threshold))
 
 # Prepare data frame for plotting
 mito_counts <- table(df_mito$Threshold)
@@ -164,5 +188,47 @@ ggsave("./A_Search_Strategies/img/mito_pie_chart.png",
        plot = mito_plot, width = 5, height = 5, units = "in", dpi = 300, bg = "transparent")
 
 
+# Create the stacked bar graph
+threshold_ranks <- ggplot(mito_df, aes(x = Threshold, y = Count)) +
+  geom_bar(stat = "identity", width = 0.55, fill = "#001E5C") +
+  scale_y_continuous(breaks = seq(0, 12, 1), limits = c(0, 12)) + 
+  theme_classic() + 
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        #axis.text.x = element_blank(),
+        axis.line = element_blank(),
+        legend.position = "none"
+  )
+
+ggsave("./A_Search_Strategies/img/thresholds_bar_chart.png", 
+       plot = threshold_ranks, width = 14, height = 3.7, units = "in", dpi = 300, bg = "transparent")
+
+
+
+
+
+
+#-------------------------------------------------------------------------------
+# Values for mitochondrial threshold
+#-------------------------------------------------------------------------------
+
+# Test correlation of mitochondrial thresholds with covariates ------
+
+# General stats of threshold values 
+
+
+df_mito_numbers <- df_mito %>%
+  filter(!is.na(as.numeric(as.character(Threshold))))
+
+# Convert the Threshold column to numeric
+df_mito_numbers$Threshold <- as.numeric(as.character(df_mito_numbers$Threshold))
+median(as.numeric(df_mito_numbers$Threshold))
+mean(as.numeric(df_mito_numbers$Threshold))
+sd(as.numeric(df_mito_numbers$Threshold))
+
+
+
+
+     
 
 ### End 
