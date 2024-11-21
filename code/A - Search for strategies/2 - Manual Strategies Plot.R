@@ -34,9 +34,11 @@
 # Load necessary libraries
 library(ggplot2)
 library(dplyr)
+library(lubridate)
 
 # Set the working directory to the Zenodo directory 
 # setwd("/Users/name/Zenodo")
+setwd("/Users/alicen/Projects/ReviewArticle/Zenodo/")
 
 #-------------------------------------------------------------------------------
 # ALL STRATEGIES 
@@ -216,9 +218,14 @@ ggsave("./A_Search_Strategies/img/thresholds_bar_chart.png",
 
 # General stats of threshold values 
 
-
 df_mito_numbers <- df_mito %>%
   filter(!is.na(as.numeric(as.character(Threshold))))
+df_mito_numbers$Explanation <- NULL
+
+# Convert Year and Month into single date 
+df_mito_numbers$Month <- match(df_mito_numbers$Month, month.abb)
+df_mito_numbers$Date <- make_date(year = df_mito_numbers$Year, month = df_mito_numbers$Month, day = 1)
+
 
 # Convert the Threshold column to numeric
 df_mito_numbers$Threshold <- as.numeric(as.character(df_mito_numbers$Threshold))
@@ -227,8 +234,119 @@ mean(as.numeric(df_mito_numbers$Threshold))
 sd(as.numeric(df_mito_numbers$Threshold))
 
 
+# Question 1: relationship between time & thresholds ----
+
+# Linear regression model
+model_year <- lm(Threshold ~ Date, data = df_mito_numbers)
+
+# Summary of the model
+model_summary <- summary(model_year)
+r_squared <- model_summary$r.squared
+p_value <- model_summary$coefficients[2, 4] 
+
+# Visualization
+ggplot(df_mito_numbers, aes(x = Date, y = Threshold)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) +
+  labs(x = "", y = "Mitochondrial Threshold (%)") +
+  theme_classic() + 
+  theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.8), 
+        axis.text = element_text(size = 12), 
+        axis.title = element_text(size = 12)) +
+  annotate("text", 
+           x = min(df_mito_numbers$Date), 
+           y = max(df_mito_numbers$Threshold), 
+           label = paste0("R² = ", round(r_squared, 4), "\n", 
+                          "p = ", signif(p_value, 3)), 
+           hjust = 0, 
+           size = 5, 
+           color = "black")
+
+ggsave("./A_Search_Strategies/img/correlation_mito_date.png", 
+      width = 7, height = 6.5, units = "in", dpi = 300, bg = "transparent")
 
 
-     
+# Question 2: Do the thresholds used differ across the species under investigation -----
+
+# Only including species with at least three data points
+df_mito_numbers_species <- subset(df_mito_numbers, subset = (Species %in% c("Human","Mouse")))
+
+# Compare humans vs other species 
+kruskal_test <- kruskal.test(Threshold ~ Species, data = df_mito_numbers_species)
+p_value <- kruskal_test$p.value
+
+# Visualization with p-value
+ggplot(df_mito_numbers_species, aes(x = Species, y = Threshold)) +
+  geom_boxplot() +
+  labs(title = "",
+       x = "",
+       y = "Mitochondrial Threshold (%)") +
+  theme_classic() + 
+  theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.8), 
+        axis.text = element_text(size = 12), 
+        axis.title = element_text(size = 12), 
+        legend.position = "none") +
+  annotate("text", 
+           x = 1.5,  # Adjust this based on your data to position the p-value
+           y = max(df_mito_numbers_species$Threshold, na.rm = TRUE), 
+           label = paste0("p = ", signif(p_value, 3)), 
+           size = 5, 
+           color = "black")
+
+
+ggsave("./A_Search_Strategies/img/correlation_mito_species.png", 
+       width = 4, height = 6.6, units = "in", dpi = 300, bg = "transparent")
+
+
+
+# Question 3: Do the thresholds used differ across the (broad) study application -----
+
+# Only including application with at least three data points
+df_mito_numbers_application <- subset(df_mito_numbers, subset = Application != "Development")
+
+# Normality testing 
+shapiro_test <- by(df_mito_numbers_application$Threshold, df_mito_numbers_application$Application, shapiro.test)
+# Cancer        p-value 8.337e - 05 (no)
+# Cell line     p-value 0.6369      (yes)
+# Tissue        p-value 0.0164      (no)
+# (ANOVA not appropriate)
+
+# Compare humans vs other species
+kruskal_test <- .test(Threshold ~ Application, data = df_mito_numbers_application)
+p_value <- kruskal_test$p.value
+
+# Perform pairwise Kruskal-Wallis tests (post-hoc)
+kruskal_pairwise <- pairwise.wilcox.test(df_mito_numbers_application$Threshold, 
+                                         df_mito_numbers_application$Application, 
+                                         p.adjust.method = "BH")  
+
+# Extract adjusted p-values
+p_adjusted_values <- kruskal_pairwise$p.value
+p_value_cancer_tissue <- p_adjusted_values["Cancer", "Tissue"]
+
+
+# Visualization with p-value
+ggplot(df_mito_numbers_application, aes(x = Application, y = Threshold)) +
+  geom_boxplot() +
+  labs(title = "",
+       x = "",
+       y = "Mitochondrial Threshold (%)") +
+  theme_classic() + 
+  theme(panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.8), 
+        axis.text = element_text(size = 12), 
+        axis.title = element_text(size = 12), 
+        legend.position = "none") +
+  annotate("text", 
+           x = 1.5,  # Adjust x to position p-value between groups
+           y = max(df_mito_numbers_application$Threshold, na.rm = TRUE), 
+           label = paste0("p_adj = ", signif(p_value_cancer_tissue, 3)), 
+           size = 5, 
+           color = "black")
+
+
+ggsave("./A_Search_Strategies/img/correlation_mito_application.png", 
+       width = 5, height = 6.6, units = "in", dpi = 300, bg = "transparent")
+
+
 
 ### End 
