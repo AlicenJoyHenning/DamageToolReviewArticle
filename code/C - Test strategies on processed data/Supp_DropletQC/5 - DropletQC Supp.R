@@ -1,4 +1,7 @@
-# validrops 
+# CONTEXT
+# 
+# DropletQC with empty droplets included was run by default in the run strategies workflow.
+# This script isolates the two DropletQC run (normal damaged run and damaged & empty droplet run) and compares their performance. 
 
 #-------------------------------------------------------------------------------
 # PREPARATIONS
