@@ -15,7 +15,7 @@
 if (!require("pacman")) install.packages("pacman")
 library(pacman)
 
-pacman::p_load(cowplot, dplyr, ggrepel, ggplot2, irr, Seurat, purrr)
+pacman::p_load(circlize, cowplot, dplyr, ggdendro, ggrepel, ggplot2, reshape2, irr, Seurat, purrr)
 
 
 # Load datasets  -----
@@ -78,25 +78,27 @@ View(simulated$control_sim_1_2.5)
 
 # Define palette
 strategy_colours <- c(
-  "ddqc" = "#CE9DBA",
-  "DropletQC" = "#A799C9",
-  "ensembleKQC" = "#E7E4F6", 
-  "miQC" = "#808C98", 
-  "SampleQC" = "#CED5DB",
-  "scater" = "#88A1BD", 
-  "valiDrops" = "#D3E2F6",
-  "manual_all" = "#4F618F",
-  "manual_mito_isolated" = "#A6BEAE", 
-  "manual_mito" = "#DCECE2", 
-  "manual_mito_ribo" = "#9DBD78",
-  "manual_malat1" = "#D7E7BE"
+  "ddqc" = "#F1D6CD",
+  "DropletQC" = "#E3CAD8",
+  "ensembleKQC" = "#CE9DBA",
+  "miQC" = "#A799C9",
+  "SampleQC" = "#E7E4F6", 
+  "scater" = "#808C98", 
+  "valiDrops" = "#CED5DB",
+  "manual_fixed_mito" = "#88A1BD", 
+  "manual_adaptive_mito" = "#D3E2F6",
+  "manual_mito_ribo" = "#4F618F",
+  "manual_mito_ribo_library" = "#A6BEAE", 
+  "manual_library" = "#DCECE2", 
+  "manual_malat1" = "#9DBD78",
+  "manual_malat1_mito_ribo" = "#D7E7BE"
 )
+
 
 
 # Define the desired order
-desired_order <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
-                    "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
-)
+desired_order <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+                    "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
 
 
 # Define theme 
@@ -136,8 +138,8 @@ barplot_theme <- function() {
 
 find_proportion_damaged <- function(data, project_name){
   
-  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
-                   "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")]
+  data <- data[,  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+                    "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")]
   
   # Calculate damaged proportion for each column
   damaged_proportion <- sapply(data, function(column) {
@@ -262,6 +264,35 @@ all_desired_order <- all_df  %>%
 all_df   <- all_df  %>%
   mutate(strategy = factor(strategy, levels = all_desired_order))
 
+# Plotting aesthetics 
+performance_bar_theme <- function() {
+  theme_minimal() +  
+    theme(
+      legend.title = element_blank(),
+      legend.text = element_text(size = 16),
+      legend.position = "none",
+      legend.justification = "center",
+      axis.text = element_text(size = 18),
+      # axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.line.y = element_line(color = "black"),
+      #axis.line.x = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.spacing = unit(1.5, "lines"),
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.8),
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.background = element_rect(fill = "white", color = NA),
+      plot.title = element_text(vjust = 3.8, face = "bold", size = 16),
+      strip.background = element_rect(fill = "white"),
+      strip.text = element_text(color = "black", size = 12, face = "bold"),
+      plot.margin = margin(20, 20, 40, 20)
+    )
+}
+
+
 
 # Damaged proportion plots
 proportion_damaged_groundtruth_plot <- ggplot(groundtruth_df, aes(x = strategy, y = median_value, fill = strategy)) +
@@ -271,21 +302,7 @@ proportion_damaged_groundtruth_plot <- ggplot(groundtruth_df, aes(x = strategy, 
   coord_flip() + 
  # scale_y_reverse(limits = c(60, 0)) +  
   scale_y_continuous(limits = c(0, 70)) + 
-  labs(title = "a      Damaged proportion", y = "") + 
-  barplot_theme() + 
-  theme(plot.title = element_blank(),
-        plot.margin = margin(50, 10, 50, 30), 
-        axis.text.y = element_blank(),
-        axis.text.x = element_text(size = 60, vjust = -0.5),
-        legend.text = element_text(size = 22),
-        legend.spacing.x = unit(1.0, 'cm'), 
-        legend.position = "none",
-        legend.justification = c(-0.05, -0.2), 
-        panel.background = element_rect(fill = "white", color = NA),
-        plot.background = element_rect(fill = "white", color = NA)) + 
-  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
-
-
+  performance_bar_theme() 
 
 
 proportion_damaged_non_groundtruth_plot <- ggplot(non_groundtruth_df, aes(x = strategy, y = median_value, fill = strategy)) +
@@ -295,21 +312,8 @@ proportion_damaged_non_groundtruth_plot <- ggplot(non_groundtruth_df, aes(x = st
   coord_flip() + 
  # scale_y_reverse(limits = c(60, 0)) +  
   scale_y_continuous(limits = c(0, 70)) + 
-  labs(title = "a      Damaged proportion", y = "") + 
-  barplot_theme() + 
-  theme(plot.title = element_blank(),
-        plot.margin = margin(50, 10, 50, 30), 
-        axis.text.y = element_blank(),
-        axis.text.x = element_text(size = 60, vjust = -0.5),
-        legend.text = element_text(size = 22),
-        legend.spacing.x = unit(1.0, 'cm'), 
-        legend.position = "none",
-        legend.justification = c(-0.05, -0.2), 
-        panel.background = element_rect(fill = "white", color = NA),
-        plot.background = element_rect(fill = "white", color = NA)) + 
-  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
-
-
+  performance_bar_theme() + 
+  theme(axis.text.y = element_blank())
  
 proportion_damaged_simulated_plot <- ggplot(simulated_full_df, aes(x = strategy, y = median_value, fill = strategy)) +
   geom_bar(stat = "identity") +
@@ -318,25 +322,15 @@ proportion_damaged_simulated_plot <- ggplot(simulated_full_df, aes(x = strategy,
   coord_flip() + 
  # scale_y_reverse(limits = c(60, 0)) +  
   scale_y_continuous(limits = c(0, 70)) + 
-  labs(title = "a      Damaged proportion", y = "") + 
-  barplot_theme() + 
-  theme(plot.title = element_blank(),
-        plot.margin = margin(50, 10, 50, 30), 
-        axis.text.y = element_blank(),
-        axis.text.x = element_text(size = 60, vjust = -0.5),
-        legend.text = element_text(size = 22),
-        legend.spacing.x = unit(1.0, 'cm'), 
-        legend.position = "none",
-        legend.justification = c(-0.05, -0.2), 
-        panel.background = element_rect(fill = "white", color = NA),
-        plot.background = element_rect(fill = "white", color = NA)) + 
-  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
+  performance_bar_theme() + 
+  theme(axis.text.y = element_blank())
+
 
 
 # Viewed individually 
 damaged_plot <- proportion_damaged_groundtruth_plot | proportion_damaged_non_groundtruth_plot | proportion_damaged_simulated_plot 
 ggsave(filename = file.path("./D_Summarise_Results /img/proportions_plot.png"), 
-       plot = damaged_plot, width = 40, height = 14, dpi = 300)
+       width = 18, height = 6.5, units = "in")
 
 
 
@@ -347,18 +341,7 @@ proportion_damaged_plot <- ggplot(all_df, aes(x = strategy, y = median_value, fi
   scale_fill_manual(values = strategy_colours) +
   coord_flip() + 
   scale_y_reverse(limits = c(60, 0)) +  # Reverse the y-axis
-  labs(title = "a      Damaged proportion", y = "") + 
-  barplot_theme() + 
-  theme(plot.title = element_blank(),
-        plot.margin = margin(50, 10, 50, 30), 
-        axis.text.x = element_text(size = 34, vjust = -0.5),
-        legend.text = element_text(size = 22),
-        legend.spacing.x = unit(1.0, 'cm'), 
-        legend.position = "none",
-        legend.justification = c(-0.05, -0.2), 
-        panel.background = element_rect(fill = "white", color = NA),
-        plot.background = element_rect(fill = "white", color = NA)) + 
-  guides(fill = guide_legend(nrow = 1, keywidth=0.4, keyheight=0.1, default.unit="inch"))
+  barplot_theme() 
 
 
 
@@ -371,8 +354,9 @@ proportion_damaged_plot <- ggplot(all_df, aes(x = strategy, y = median_value, fi
 find_proportion_unique <- function(data, project_name, groundtruth = NULL) {
   
   # Define tools and columns of interest for the data frame 
-  tools <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater", "valiDrops", 
-             "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
+  tools <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+             "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
+  
   
   columns <- c("orig.ident", tools)
   data <- data[, columns]
@@ -643,8 +627,8 @@ ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_resul
 calculate_similarity <- function(data){
   
   # Isolate columns of interest 
-  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater", "valiDrops",
-                   "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")]
+  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+                   "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")]
   
   # Convert damaged/cell labels to binary 1/0
   data <- as.data.frame(lapply(data, function(x) ifelse(x == 'damaged', 1, 0)))
@@ -671,14 +655,61 @@ calculate_similarity <- function(data){
   kappa_matrix[is.nan(kappa_matrix)] <- 0
   
   # Name the rows & columns 
-  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
-  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
+  tool_names <-  c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+                    "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
+                  
 
   rownames(kappa_matrix) <- colnames(kappa_matrix) <- tool_names
   
   return(kappa_matrix)
   
 }
+
+# Alternative to focus on damage 
+# Calculate pairwise Cohen's Kappa scores for damaged cell predictions
+calculate_similarity <- function(data) {
+  
+  # Isolate columns of interest
+  data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops", 
+                   "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo", "manual_mito_ribo_library", 
+                   "manual_library", "manual_malat1", "manual_malat1_mito_ribo")]
+  
+  # Convert damaged/cell labels to binary 1/0
+  binary_data <- as.data.frame(lapply(data, function(x) ifelse(x == 'damaged', 1, 0)))
+  
+  # Filter rows where at least one tool predicts a damaged cell
+  damaged_only_data <- binary_data[rowSums(binary_data) > 0, ]
+  
+  # Extract the number of tools
+  tools <- colnames(damaged_only_data)
+  num_tools <- length(tools)
+  
+  # Initialize an empty matrix for Cohen's Kappa
+  kappa_matrix <- matrix(NA, nrow = num_tools, ncol = num_tools, 
+                         dimnames = list(tools, tools))
+  
+  # Calculate Cohen's Kappa for all tool pairs
+  for (i in 1:num_tools) {
+    for (j in 1:num_tools) {
+      # Handle cases where a tool predicts no damaged cells
+      if (all(damaged_only_data[, i] == 0) || all(damaged_only_data[, j] == 0)) {
+        kappa_matrix[i, j] <- NA  # Mark as NA for tools with no predictions
+      } else {
+        kappa_result <- kappa2(data.frame(damaged_only_data[, i], damaged_only_data[, j]))$value
+        kappa_matrix[i, j] <- kappa_result
+      }
+    }
+  }
+  
+  # Name the rows and columns
+  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops", 
+                  "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo", "manual_mito_ribo_library", 
+                  "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
+  rownames(kappa_matrix) <- colnames(kappa_matrix) <- tool_names
+  
+  return(kappa_matrix)
+}
+
 
 # Apply the calculation
 # Ground truth 
@@ -714,7 +745,7 @@ for (name in names(simulated)){
 }
 
 
-# Calculate the median similarity scores across input datasets
+# Calculate the median similarity scores across input datasets, converting NAs to -1
 calculate_median <- function(input_list) {
   
   # Initialize an empty list to store the matrices
@@ -726,22 +757,25 @@ calculate_median <- function(input_list) {
   }
   
   # Combine into array
-  matrices_array <- array(unlist(matrices), dim = c(12, 12, length(matrices)))
+  matrices_array <- array(unlist(matrices), dim = c(14, 14, length(matrices)))
+  
+  # Replace NA values with -1 in the array
+  matrices_array[is.na(matrices_array)] <- -1
   
   # Calculate the median for each position across the matrices
   result <- apply(matrices_array, c(1, 2), median, na.rm = TRUE)
   
-
-  return(result) # 11 x 11 matrix 
+  return(result) # 14 x 14 matrix 
   
 }
 
+
 # Define lists for input
-groundtruth_matrices <- list(A549_matrix, dLiver_matrix, dLung_matrix, dPBMC_matrix, ductal_matrix,
+non_groundtruth_matrices <- list(A549_matrix, dLiver_matrix, dLung_matrix, dPBMC_matrix, ductal_matrix,
                              glio_matrix, HCT116_matrix, hLiver_matrix, hLung_matrix, hodgkin_matrix,
                              hPBMC_matrix, Jurkat_matrix, mLiver_matrix, mLung_matrix, mPBMC_matrix)
 
-non_groundtruth_matrices <- list(apoptotic_matrix, pro_apoptotic_matrix, GM18507_dead_matrix, GM18507_dying_matrix, PDX_matrix)
+groundtruth_matrices <- list(apoptotic_matrix, pro_apoptotic_matrix, GM18507_dead_matrix, GM18507_dying_matrix, PDX_matrix)
 
 # Simulated
 simulated_matrices <- list(simulated_matrix$control_sim_1_2.5, simulated_matrix$control_sim_1_5, simulated_matrix$control_sim_1_10, simulated_matrix$control_sim_1_15, simulated_matrix$control_sim_1_20,
@@ -760,12 +794,17 @@ non_groundtruth_similarity <- calculate_median(non_groundtruth_matrices)
 simulated_similarity <- calculate_median(simulated_matrices)
 all_similarity <- calculate_median(all_matrices)
 
-PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
+# Plot similarity between tool outputs (0 - cell, 1 - damaged) as a PCA plot
+PlotSimilarityPCA <- function(matrix, title, metric = "Cohen's Kappa") {
   
   # Add the tool names -----
   similarity_matrix <- matrix
-  rownames(similarity_matrix) <- colnames(similarity_matrix) <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
-  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
+  rownames(similarity_matrix) <- colnames(similarity_matrix) <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+                                                                  "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
+  
+  
+  # Remove outlier of DropletQC
+  similarity_matrix <- similarity_matrix[rownames(similarity_matrix) != "DropletQC", colnames(similarity_matrix) != "DropletQC"]
   
   # Add a small constant to the diagonal elements to avoid zero variance issues
   diag(similarity_matrix) <- diag(similarity_matrix) + 1e-6
@@ -811,25 +850,99 @@ PlotSimilarity <- function(matrix, title, metric = "Cohen's Kappa") {
   
 } 
 
+PlotSimilarityHeatmap <- function(matrix, title, metric = "Cohen's Kappa") {
+  
+  # Add the tool names -----
+  similarity_matrix <- matrix
+  rownames(similarity_matrix) <- colnames(similarity_matrix) <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+                                                                  "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
+  
+  # Melt the similarity matrix into long format for ggplot
+  melted_matrix <- melt(similarity_matrix)
+  colnames(melted_matrix) <- c("Method1", "Method2", "Similarity")
+  
+  # Create a heatmap -----
+  heatmap_plot <- ggplot(melted_matrix, aes(x = Method1, y = Method2, fill = Similarity)) +
+    geom_tile(color = "white") +  # Add gridlines
+    scale_fill_gradient2(
+      low = "#70C5BD",   # Teal for low values
+      mid = "white",     # White for midpoint
+      high = "#001E5C",  # Deep blue for high values
+      midpoint = mean(similarity_matrix, na.rm = TRUE) # Center the gradient at the mean
+    ) +
+    theme_minimal() +
+    labs(title = title,
+         fill = metric) + 
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+      axis.text.y = element_text(size = 10),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+      legend.title = element_text(size = 12),
+      legend.text = element_text(size = 10)
+    )
+  
+  # Return the heatmap
+  return(heatmap_plot)
+}
+
+PlotSimilarityDendrogram <- function(matrix, title) {
+  # Assign tool names to rows and columns
+  rownames(matrix) <- colnames(matrix) <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", 
+                                            "valiDrops", "manual_fixed_mito", "manual_adaptive_mito", 
+                                            "manual_mito_ribo", "manual_mito_ribo_library", "manual_library", 
+                                            "manual_malat1", "manual_malat1_mito_ribo")
+  
+  # Compute hierarchical clustering
+  dist_matrix <- as.dist(1 - matrix)  # Convert similarity to dissimilarity
+  hc <- hclust(dist_matrix, method = "complete")
+  
+  # Convert to dendrogram
+  dendro <- as.dendrogram(hc)
+  
+  # Plot the dendrogram with tool names
+  ggdendrogram(dendro, rotate = TRUE, theme_dendro = FALSE) +
+    ggtitle(title) +
+    theme_classic() +
+    theme(
+      axis.text.y = element_text(size = 10),  
+      axis.text.x = element_blank(), 
+      axis.title.x = element_blank(), 
+      axis.title.y = element_blank(),       
+      axis.ticks = element_blank(),
+      axis.line = element_blank(),
+      plot.title = element_text(hjust = 0.5, size = 16, face = "bold")
+    )
+}
+
+
+
 # Run the function on each covariate case
-groundtruth_similarity_PCA <- PlotSimilarity(matrix = groundtruth_similarity, title = "")
-ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics//groundtruth_PCA.png"), 
-       plot = groundtruth_similarity_PCA, width = 8, height = 7, dpi = 300)
+groundtruth_similarity_PCA <- PlotSimilarityPCA(matrix = groundtruth_similarity, title = "")
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/groundtruth_PCA.png"), 
+      plot = groundtruth_similarity_PCA, width = 10, height = 7, dpi = 300) 
 
+groundtruth_similarity_dendogram <- PlotSimilarityDendrogram(matrix = groundtruth_similarity, title = "")
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/groundtruth_dendogram.png"), 
+       plot = groundtruth_similarity_dendogram, width = 6.2, height = 7.8, dpi = 300) 
 
-non_groundtruth_similarity_PCA <- PlotSimilarity(non_groundtruth_similarity, title = "")
+non_groundtruth_similarity_PCA <- PlotSimilarityPCA(non_groundtruth_similarity, title = "")
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/non_groundtruth_PCA.png"), 
-       plot = non_groundtruth_similarity_PCA, width = 8, height = 7, dpi = 300)
+       plot = non_groundtruth_similarity_PCA, width = 10, height = 7, dpi = 300)
+
+non_groundtruth_similarity_dendogram <- PlotSimilarityDendrogram(non_groundtruth_similarity, title = "")
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/non_groundtruth_Dendogram.png"), 
+       plot = non_groundtruth_similarity_dendogram, width = 6.2, height = 7.8, dpi = 300)
 
 
-simulated_similarity_PCA <- PlotSimilarity(simulated_similarity, title = "")
+simulated_similarity_PCA <- PlotSimilarityPCA(simulated_similarity, title = "")
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/simulated_PCA.png"), 
-       plot = simulated_similarity_PCA, width = 8, height = 7, dpi = 300)
+       plot = simulated_similarity_PCA, width = 10, height = 7, dpi = 300)
 
-
-all_similarity_PCA <- PlotSimilarity(all_similarity, title = "")
-ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/all_PCA.png"), 
-       plot = all_similarity_PCA , width = 12, height = 7, dpi = 300)
+simulated_similarity_dendogram <- PlotSimilarityDendrogram(simulated_similarity, title = "")
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/simulated_dendogram.png"), 
+       plot = simulated_similarity_dendogram, width = 6.2, height = 7.8, dpi = 300)
 
 
 #-------------------------------------------------------------------------------
@@ -843,8 +956,9 @@ ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_
 calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
   
   
-  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops", 
-                  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1")
+  tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+                  "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
+
 
     # Initialize an empty data frame to store the standard deviation of Kappa scores for each tool
   deviation_scores <- data.frame(tool = character(),
@@ -927,8 +1041,41 @@ simulated_kappa_matrices <- list(simulated_matrix$control_sim_1_2.5, simulated_m
 
 
 groundtruth_deviation_scores <- calculate_deviation_scores(groundtruth_kappa_matrices, groundtruth_df)
+groundtruth_deviation_scores$consistency_groundtruth <- groundtruth_deviation_scores$consistency
 non_groundtruth_deviation_scores <- calculate_deviation_scores(non_groundtruth_kappa_matrices, non_groundtruth_df)
+non_groundtruth_deviation_scores$consistency_non_groundtruth <- non_groundtruth_deviation_scores$consistency
 simulated_deviation_scores <- calculate_deviation_scores(simulated_kappa_matrices, simulated_df)
+simulated_deviation_scores$consistency_simulated <- simulated_deviation_scores$consistency
+
+deviation_scores <- groundtruth_deviation_scores %>%
+  dplyr::select(tool, consistency_groundtruth) %>%
+  inner_join(
+    non_groundtruth_deviation_scores %>%
+      select(tool, consistency_non_groundtruth),
+    by = "tool"
+  ) %>%
+  inner_join(
+    simulated_deviation_scores %>%
+      dplyr::select(tool, consistency_simulated),
+    by = "tool"
+  ) %>%
+  mutate(
+    rank_consistency_groundtruth = rank(consistency_groundtruth, ties.method = "min"),
+    rank_consistency_non_groundtruth = rank(consistency_non_groundtruth, ties.method = "min"),
+    rank_consistency_simulated = rank(consistency_simulated, ties.method = "min")
+  )
+
+
+View(deviation_scores)
+
+
+# Save and view final results
+write.csv(deviation_scores, 
+          file = "./D_Summarise_Results /data/consistency_ranked.csv",
+          quote = FALSE, 
+          row.names = FALSE
+)
+
 
 
 # Plot 
@@ -946,7 +1093,7 @@ consistency_groundtruth_plot <- ggplot(groundtruth_deviation_scores, aes(x = too
         plot.background = element_rect(fill = "white", color = NA)
         ) 
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_groundtruth_plot.png"), 
-       plot = consistency_groundtruth_plot, width = 12, height = 12, dpi = 300)
+       plot = consistency_groundtruth_plot, width = 8, height = 12, dpi = 300)
 
 
 consistency_non_groundtruth_plot <- ggplot(non_groundtruth_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
@@ -963,7 +1110,7 @@ consistency_non_groundtruth_plot <- ggplot(non_groundtruth_deviation_scores, aes
         plot.background = element_rect(fill = "white", color = NA)
         ) 
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_non_groundtruth_plot.png"), 
-       plot = consistency_non_groundtruth_plot , width = 12, height = 12, dpi = 300)
+       plot = consistency_non_groundtruth_plot , width = 8, height = 12, dpi = 300)
 
 consistency_simulated_plot <- ggplot(simulated_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
   geom_bar(stat = "identity") +
@@ -980,113 +1127,11 @@ consistency_simulated_plot <- ggplot(simulated_deviation_scores, aes(x = tool, y
   ) 
 
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_simulated_plot.png"), 
-       plot = consistency_simulated_plot, width = 12, height = 12, dpi = 300)
+       plot = consistency_simulated_plot, width = 8, height = 12, dpi = 300)
 
+
+# Very similar
 consistency_groundtruth_plot | consistency_non_groundtruth_plot | consistency_simulated_plot
-
-
-#-------------------------------------------------------------------------------
-# COMBINE
-#-------------------------------------------------------------------------------
-
-# Combine plots ----
-
-# # # Quick calculation of total cell numbers for labels 
-# data_frames <- list(A549, dLiver, dLung, dPBMC, ductal, 
-#                     glio, HCT116, hLiver, hLung, hodgkin, 
-#                     hPBMC, Jurkat, mLiver, mLung, mPBMC,
-#                     apoptotic, pro_apoptotic, GM18507_dead, GM18507_dying, PDX)
-# 
-# 
-# # Total cell number
-# total_entries <- 0
-# for (df in data_frames) {
-#   total_entries <- total_entries + dim(df)[1]
-# }
-# 
-# # Simulated
-# total_entries <- 0
-# for (name in names(simulated)) {
-#    total_entries <- total_entries + dim(simulated[[name]])[1]
-# }
-# 
-# # Median cell number from all datasets 
-# cell_numbers <- data.frame(cell_number = c(
-#   dim(A549)[1], dim(dLiver)[1], dim(dLung)[1], dim(dPBMC)[1], dim(ductal)[1], 
-#   dim(glio)[1], dim(HCT116)[1], dim(hLiver)[1], dim(hLung)[1], dim(hodgkin)[1], 
-#   dim(hPBMC)[1], dim(Jurkat)[1], dim(mLiver)[1], dim(mLung)[1], dim(mPBMC)[1],
-#   dim(apoptotic)[1], dim(pro_apoptotic)[1], dim(GM18507_dead)[1], dim(GM18507_dying)[1], dim(PDX)[1]))
-# 
-# 
-# median_value <- median(cell_numbers$cell_number)
-# print(median_value)
-
-
-
-
-# Create titles
-groundtruth_title <- ggdraw() + 
-  draw_label("Ground truth datasets (n = 6, cells = 40 604)", 
-             fontface = 'bold', 
-             size = 24,
-             x = 0, 
-             hjust = -0.12) + 
-  theme(plot.margin = margin(0, 0, -50, 2))
-
-non_groundtruth_title <- ggdraw() + 
-  draw_label("Non-ground truth datasets (n = 15, cells = 94 603)", 
-             fontface = 'bold', 
-             size = 24,
-             x = 0, 
-             hjust = -0.11) + 
-  theme(plot.margin = margin(0, 0, -50, 2))
-
-# Arrange the groundtruth plots
-groundtruth_plots <- plot_grid(
-  proportion_damaged_groundtruth_plot,
-  proportion_unique_groundtruth_plot, 
-  consistency_groundtruth_plot,
-  groundtruth_similarity_PCA,
-  ncol = 4, 
-  rel_widths = c(1, 1, 1, 2.2)
-)
-
-# Combine the groundtruth title and plots
-groundtruth_combined <- plot_grid(
-  groundtruth_title, 
-  groundtruth_plots, 
-  ncol = 1, 
-  rel_heights = c(0.1, 1)
-)
-
-# Arrange the non-groundtruth plots
-non_groundtruth_plots <- plot_grid(
-  proportion_damaged_non_groundtruth_plot,
-  proportion_unique_non_groundtruth_plot, 
-  consistency_non_groundtruth_plot,
-  non_groundtruth_similarity_PCA,
-  ncol = 4, 
-  rel_widths = c(1, 1, 1, 2.2)
-)
-
-# Combine the non-groundtruth title and plots
-non_groundtruth_combined <- plot_grid(
-  non_groundtruth_title, 
-  non_groundtruth_plots, 
-  ncol = 1, 
-  rel_heights = c(0.1, 1)
-)
-
-# Combine the groundtruth and non-groundtruth plots
-final_plot <- plot_grid(
-  groundtruth_combined, 
-  non_groundtruth_combined, 
-  ncol = 1, 
-  rel_heights = c(1, 1)
-) + theme(plot.background = element_rect(fill = "white", color = NA))
-
-# Save the final plot as a PNG with appropriate dimensions
-ggsave("./D_Summarise_Results /img/Tool_results/comparison_metrics/comparison_metrics.png", plot = final_plot, width = 38, height = 18, units = "in")
 
 
 ### End 
