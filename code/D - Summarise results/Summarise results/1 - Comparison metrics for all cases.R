@@ -623,8 +623,8 @@ ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_resul
 
 # Similarity of tools in PCA  ----
 
-# Calculate pairwise cohen's kappa scores for each dataset
-calculate_similarity <- function(data){
+# Calculate pairwise cohen's kappa scores for each dataset (included all predictions, cell and damaged)
+calculate_similarity_original <- function(data){
   
   # Isolate columns of interest 
   data <- data[, c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
@@ -707,7 +707,11 @@ calculate_similarity <- function(data) {
                   "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
   rownames(kappa_matrix) <- colnames(kappa_matrix) <- tool_names
   
+  # Replace NA values with -1 in the array
+  kappa_matrix[is.na(kappa_matrix)] <- -1
+  
   return(kappa_matrix)
+  
 }
 
 
@@ -958,9 +962,9 @@ calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
   
   tool_names <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
                   "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
-
-
-    # Initialize an empty data frame to store the standard deviation of Kappa scores for each tool
+  
+  
+  # Initialize an empty data frame to store the standard deviation of Kappa scores for each tool
   deviation_scores <- data.frame(tool = character(),
                                  similarity_deviation = numeric(), 
                                  stringsAsFactors = FALSE)
@@ -973,6 +977,12 @@ calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
     # Calculate the pairwise standard deviations across datasets
     for (other_tool in 1:length(tool_names)) {
       if (tool != other_tool) {
+        
+        if (tool == "DropletQC"){
+          
+          
+          
+        }
         
         # Collect the Kappa scores between tool and other_tool across datasets
         kappa_scores <- sapply(kappa_matrices, function(mat) mat[tool, other_tool])
@@ -996,11 +1006,6 @@ calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
   # Deviations of proportion damaged detected for each tool across datasets 
   deviation_scores$damaged_deviation <- apply(groundtruth_df, 1, sd, na.rm = TRUE)
   
-  # Rescale similarity deviation to [0, 1] range
-  # sim_min <- min(deviation_scores$similarity_deviation, na.rm = TRUE)
-  # sim_max <- max(deviation_scores$similarity_deviation, na.rm = TRUE)
-  # deviation_scores$similarity_deviation_rescaled <- (deviation_scores$similarity_deviation - sim_min) / (sim_max - sim_min)
-  
   # Rescale damaged deviation to [0, 1] range
   damaged_min <- min(deviation_scores$damaged_deviation, na.rm = TRUE)
   damaged_max <- max(deviation_scores$damaged_deviation, na.rm = TRUE)
@@ -1022,7 +1027,6 @@ calculate_deviation_scores <- function(kappa_matrices, damaged_df) {
   return(deviation_scores)
 }
 
-
 groundtruth_kappa_matrices <- list(apoptotic_matrix, apoptotic_matrix, GM18507_dead_matrix, GM18507_dying_matrix, PDX_matrix)
 
 non_groundtruth_kappa_matrices <- list(A549_matrix, dLiver_matrix, dLung_matrix, 
@@ -1040,29 +1044,40 @@ simulated_kappa_matrices <- list(simulated_matrix$control_sim_1_2.5, simulated_m
 
 
 
+all_kappa_matrices <- c(groundtruth_kappa_matrices, non_groundtruth_kappa_matrices, simulated_kappa_matrices)
+
+
 groundtruth_deviation_scores <- calculate_deviation_scores(groundtruth_kappa_matrices, groundtruth_df)
 groundtruth_deviation_scores$consistency_groundtruth <- groundtruth_deviation_scores$consistency
 non_groundtruth_deviation_scores <- calculate_deviation_scores(non_groundtruth_kappa_matrices, non_groundtruth_df)
 non_groundtruth_deviation_scores$consistency_non_groundtruth <- non_groundtruth_deviation_scores$consistency
 simulated_deviation_scores <- calculate_deviation_scores(simulated_kappa_matrices, simulated_df)
 simulated_deviation_scores$consistency_simulated <- simulated_deviation_scores$consistency
+all_deviation_scores <- calculate_deviation_scores(all_kappa_matrices, all_df)
+all_deviation_scores$consistency_all <- all_deviation_scores$consistency
 
 deviation_scores <- groundtruth_deviation_scores %>%
   dplyr::select(tool, consistency_groundtruth) %>%
-  inner_join(
+  dplyr::inner_join(
     non_groundtruth_deviation_scores %>%
-      select(tool, consistency_non_groundtruth),
+      dplyr::select(tool, consistency_non_groundtruth),
     by = "tool"
   ) %>%
-  inner_join(
+  dplyr::inner_join(
     simulated_deviation_scores %>%
       dplyr::select(tool, consistency_simulated),
     by = "tool"
   ) %>%
-  mutate(
+  dplyr::inner_join(
+    all_deviation_scores %>%
+      dplyr::select(tool, consistency_all),
+    by = "tool"
+  ) %>%
+  dplyr::mutate(
     rank_consistency_groundtruth = rank(consistency_groundtruth, ties.method = "min"),
     rank_consistency_non_groundtruth = rank(consistency_non_groundtruth, ties.method = "min"),
-    rank_consistency_simulated = rank(consistency_simulated, ties.method = "min")
+    rank_consistency_simulated = rank(consistency_simulated, ties.method = "min"), 
+    rank_consistency_all = rank(consistency_all, ties.method = "min"), 
   )
 
 
@@ -1082,7 +1097,7 @@ write.csv(deviation_scores,
 consistency_groundtruth_plot <- ggplot(groundtruth_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
   geom_bar(stat = "identity") +
   scale_fill_manual(values = strategy_colours) +
-  scale_y_continuous(labels = scales::number_format(accuracy = 0.1), limits = c(0, 1)) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + #, limits = c(0, 1)) +
   coord_flip() + 
   labs(title = "", y = "") + 
   barplot_theme() + 
@@ -1093,14 +1108,14 @@ consistency_groundtruth_plot <- ggplot(groundtruth_deviation_scores, aes(x = too
         plot.background = element_rect(fill = "white", color = NA)
         ) 
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_groundtruth_plot.png"), 
-       plot = consistency_groundtruth_plot, width = 8, height = 12, dpi = 300)
+       plot = consistency_groundtruth_plot, width = 6, height = 12, dpi = 300)
 
 
 consistency_non_groundtruth_plot <- ggplot(non_groundtruth_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
   geom_bar(stat = "identity") +
   coord_flip() + 
   scale_fill_manual(values = strategy_colours) +
-  scale_y_continuous(labels = scales::number_format(accuracy = 0.1), limits = c(0, 1)) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
   labs(title = "", y = "") + 
   barplot_theme() + 
   theme(plot.title = element_text(hjust = -0.3, size = 22),
@@ -1110,13 +1125,13 @@ consistency_non_groundtruth_plot <- ggplot(non_groundtruth_deviation_scores, aes
         plot.background = element_rect(fill = "white", color = NA)
         ) 
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_non_groundtruth_plot.png"), 
-       plot = consistency_non_groundtruth_plot , width = 8, height = 12, dpi = 300)
+       plot = consistency_non_groundtruth_plot , width = 6, height = 12, dpi = 300)
 
 consistency_simulated_plot <- ggplot(simulated_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
   geom_bar(stat = "identity") +
   coord_flip() + 
   scale_fill_manual(values = strategy_colours) +
-  scale_y_continuous(labels = scales::number_format(accuracy = 0.1), limits = c(0, 1)) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
   labs(title = "", y = "") + 
   barplot_theme() + 
   theme(plot.title = element_text(hjust = -0.3, size = 22),
@@ -1127,11 +1142,29 @@ consistency_simulated_plot <- ggplot(simulated_deviation_scores, aes(x = tool, y
   ) 
 
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_simulated_plot.png"), 
-       plot = consistency_simulated_plot, width = 8, height = 12, dpi = 300)
+       plot = consistency_simulated_plot, width = 6, height = 12, dpi = 300)
+
+
+consistency_all_plot <- ggplot(all_deviation_scores, aes(x = tool, y = consistency, fill = tool)) +
+  geom_bar(stat = "identity") +
+  coord_flip() + 
+  scale_fill_manual(values = strategy_colours) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
+  labs(title = "", y = "") + 
+  barplot_theme() + 
+  theme(plot.title = element_text(hjust = -0.3, size = 22),
+        plot.margin = margin(50, 20, 90, 20), # top right bottom left 
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 30, vjust = -0.7),
+        plot.background = element_rect(fill = "white", color = NA)
+  ) 
+
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/comparison_metrics/consistency_all_plot.png"), 
+       plot = consistency_simulated_plot, width = 6, height = 12, dpi = 300)
 
 
 # Very similar
-consistency_groundtruth_plot | consistency_non_groundtruth_plot | consistency_simulated_plot
+consistency_groundtruth_plot | consistency_non_groundtruth_plot | consistency_simulated_plot | consistency_all_plot
 
 
 ### End 
