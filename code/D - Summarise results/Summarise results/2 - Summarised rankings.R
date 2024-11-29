@@ -44,13 +44,13 @@ for (pkg in packages) {
 #-------------------------------------------------------------------------------
 
 # Performance -----
-performance_rankings <- read.csv("/home/alicen/Projects/ReviewArticle/summarised_results/summarised_rankings.csv")
+performance_rankings <- read.csv("./D_Summarise_Results /data/summarised_rankings.csv")
 
 # Sum the rankings 
 performance_rankings$Final_Rank <- (performance_rankings$precision + performance_rankings$PR.AUC + performance_rankings$HVG.Jaccard + performance_rankings$DEG.F1)
 
 # Convert the ranking to a score out of 40 where higher score means better performance 
-performance_rankings$Final_Rank <- 40 - performance_rankings$Final_Rank
+performance_rankings$Final_Rank <- 48 - performance_rankings$Final_Rank
 
 
 #-------------------------------------------------------------------------------
@@ -58,20 +58,21 @@ performance_rankings$Final_Rank <- 40 - performance_rankings$Final_Rank
 #-------------------------------------------------------------------------------
 
 # Consistency -----
-consistecy_rankings <- read.csv("/home/alicen/Projects/ReviewArticle/summarised_results/consistency_rankings.csv")
+consistecy_rankings <- read.csv("./D_Summarise_Results /data/consistency_ranked.csv")
 
 # Sum the rankings 
-consistecy_rankings$Final_Rank <- (consistecy_rankings$groundtruth + consistecy_rankings$non_groundtruth + consistecy_rankings$simulated)
-                                     
+# consistecy_rankings$Final_Rank <- (consistecy_rankings$groundtruth + consistecy_rankings$non_groundtruth + consistecy_rankings$simulated)
 # Convert the ranking to a score out of 40 where higher score means better performance 
-consistecy_rankings$Final_Rank <- 40 - consistecy_rankings$Final_Rank
+# consistecy_rankings$Final_Rank <- 42 - consistecy_rankings$Final_Rank
+
+consistecy_rankings$Final_Rank <- consistecy_rankings$consistency_all
 
 #-------------------------------------------------------------------------------
 # Usability 
 #-------------------------------------------------------------------------------
 
 # Usability -----
-usability_rankings <- read.csv("/home/alicen/Projects/ReviewArticle/summarised_results/usability_scores.csv")
+usability_rankings <- read.csv("./D_Summarise_Results /data/usability_scores.csv")
 
 # Apply min-max normalisation for the number of GitHub repo stars 
 min_stars <- min(usability_rankings$Stars)
@@ -98,9 +99,12 @@ Final_Ranks$Consistency <- consistecy_rankings[, c("Final_Rank")]
 Final_Ranks$Usability <- usability_rankings[, c("Final_Rank")]
 View(Final_Ranks)
 
+
+
+
 # For creating 'progress bar' like plot, add complementary column for each metric
-Final_Ranks$Performance_inverse <- 40 - Final_Ranks$Performance
-Final_Ranks$Consistency_inverse <- 40 - Final_Ranks$Consistency
+Final_Ranks$Performance_inverse <- 48 - Final_Ranks$Performance
+Final_Ranks$Consistency_inverse <- 1 - Final_Ranks$Consistency
 Final_Ranks$Usability_inverse <- 15 - Final_Ranks$Usability
 
 # Create stacked bar plot 
@@ -127,7 +131,7 @@ performance_plot <- ggplot(data_long, aes(x = value, y = method, fill = variable
         legend.position = "none"
         )
 
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/summarised_results/performance_plot.png"), 
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/performance_plot.png"), 
        plot = performance_plot, width = 7, height = 12, dpi = 300)
 
 
@@ -149,7 +153,7 @@ consistency_plot <- ggplot(data_long, aes(x = value, y = method, fill = variable
         legend.position = "none"
   )
 
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/summarised_results/consistency_plot.png"), 
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/consistency_plot.png"), 
        plot = consistency_plot, width = 7, height = 12, dpi = 300)
 
 # Usability 
@@ -170,7 +174,7 @@ usability_plot <- ggplot(data_long, aes(x = value, y = method, fill = variable))
         legend.position = "none"
   )
 
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/summarised_results/usability_plot.png"), 
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/usability_plot.png"), 
        plot = usability_plot, width = 7, height = 12, dpi = 300)
 
 # Combine all 
@@ -178,22 +182,10 @@ ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/summarised_resu
 # Remove labels for arranging
 consistency_plot <- consistency_plot + theme(axis.text = element_blank())
 usability_plot <- usability_plot + theme(axis.text = element_blank())
-
 combined_ranking <- performance_plot + consistency_plot + usability_plot 
 
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/summarised_results/usability_plot.png"), 
-       plot = combined_ranking, width = 14, height = 12, dpi = 300)
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/combined_tool_rankings_plot.png"), 
+       plot = combined_ranking, width = 14, height = 14, dpi = 300)
 
 
 ### End 
-
-
-
-
-
-
-
-
-
-
-
