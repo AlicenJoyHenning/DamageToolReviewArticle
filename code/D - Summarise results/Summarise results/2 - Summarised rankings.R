@@ -54,6 +54,17 @@ performance_rankings$Final_Rank <- 48 - performance_rankings$Final_Rank
 
 
 #-------------------------------------------------------------------------------
+# PROPORTIONs
+#-------------------------------------------------------------------------------
+
+# Proportions -----
+
+proportions <- read.csv("./D_Summarise_Results /data/proportion_damaged.csv")
+proportions$Inverse <- 100 - proportions$proportion
+
+
+
+#-------------------------------------------------------------------------------
 # Consistency 
 #-------------------------------------------------------------------------------
 
@@ -97,6 +108,7 @@ Final_Ranks$Performance <- Final_Ranks$Final_Rank
 Final_Ranks$Final_Rank <- NULL
 Final_Ranks$Consistency <- consistecy_rankings[, c("Final_Rank")]
 Final_Ranks$Usability <- usability_rankings[, c("Final_Rank")]
+Final_Ranks$Proportion <- proportions[, c("proportion")]
 View(Final_Ranks)
 
 
@@ -106,6 +118,7 @@ View(Final_Ranks)
 Final_Ranks$Performance_inverse <- 48 - Final_Ranks$Performance
 Final_Ranks$Consistency_inverse <- 1 - Final_Ranks$Consistency
 Final_Ranks$Usability_inverse <- 15 - Final_Ranks$Usability
+Final_Ranks$Proportion_inverse <- 100 - Final_Ranks$Proportion
 
 # Create stacked bar plot 
 
@@ -133,6 +146,31 @@ performance_plot <- ggplot(data_long, aes(x = value, y = method, fill = variable
 
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/performance_plot.png"), 
        plot = performance_plot, width = 7, height = 12, dpi = 300)
+
+
+
+# Create the stacked bar graph
+
+# Reshape & ensure performance is plotted first
+data_long <- reshape2::melt(Final_Ranks, id.vars = "method", measure.vars = c("Proportion", "Proportion_inverse"))
+data_long$variable <- factor(data_long$variable, levels = c("Proportion_inverse", "Proportion"))
+
+
+proportion_plot <- ggplot(data_long, aes(x = value, y = method, fill = variable)) +
+  geom_bar(stat = "identity", width = 0.55) +
+  scale_fill_manual(values = c("Proportion" = "darkgrey", "Proportion_inverse" = "#E6E6E6")) +
+  theme_classic() + 
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        axis.line = element_blank(),
+        legend.position = "none"
+  )
+
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/proportion_plot.png"), 
+       plot = proportion_plot, width = 7, height = 12, dpi = 300)
+
+
 
 
 # Consistency 
@@ -182,10 +220,10 @@ ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/usability_p
 # Remove labels for arranging
 consistency_plot <- consistency_plot + theme(axis.text = element_blank())
 usability_plot <- usability_plot + theme(axis.text = element_blank())
-combined_ranking <- performance_plot + consistency_plot + usability_plot 
-
+combined_ranking <- performance_plot |  proportion_plot |consistency_plot | usability_plot
+combined_ranking
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/combined_tool_rankings_plot.png"), 
-       plot = combined_ranking, width = 14, height = 14, dpi = 300)
+       plot = combined_ranking, width = 18, height = 14, dpi = 300)
 
 
 ### End 
