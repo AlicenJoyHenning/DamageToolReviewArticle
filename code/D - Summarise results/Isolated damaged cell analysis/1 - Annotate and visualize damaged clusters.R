@@ -23,7 +23,7 @@
 
 # Load libraries -------
 
-packages <- c("AnnotationHub", "biomaRt", "dplyr", "ggplot2", "Seurat", "svglite")
+packages <- c("AnnotationHub", "biomaRt", "dplyr", "ggplot2", "Seurat")
 
 for (pkg in packages) {
   if (!require(pkg, character.only = TRUE)) {
@@ -35,15 +35,11 @@ for (pkg in packages) {
 # Load data -------
 
 # Damaged cell samples in isolation 
-apoptotic_isolated     <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/apoptotic_isolated.rds")
-pro_apoptotic_isolated <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/pro_apoptotic_isolated.rds")
-dead_SA928_isolated    <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/reduced_dead_SA928_isolated.rds")
-dying_SA928_isolated   <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/reduced_dying_SA928_isolated.rds")
-dead_SA604_isolated    <- readRDS("/home/alicen/Projects/limiric/damage_left_behind_analysis/groundtruth/R_objects/reduced_dead_SA604_isolated.rds")
-
-dead_SA928_isolated    <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/raw_seurat/GM18507_dead.rds")
-dying_SA928_isolated    <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/raw_seurat/GM18507_dying.rds")
-dead_SA604_isolated    <- readRDS("/home/alicen/Projects/ReviewArticle/R_objects/raw_seurat/PDX_dead.rds")
+apoptotic_isolated     <- readRDS("./D_Summarise_Results /data/raw_seurat/HEK293_apoptotic_processed.rds")
+pro_apoptotic_isolated <- readRDS("./D_Summarise_Results /data/raw_seurat/HEK293_proapoptotic_processed.rds")
+dead_SA928_isolated    <- readRDS("./D_Summarise_Results /data/raw_seurat/GM18507_dead.rds")
+dying_SA928_isolated    <- readRDS("./D_Summarise_Results /data/raw_seurat/GM18507_dying.rds")
+dead_SA604_isolated    <- readRDS("./D_Summarise_Results /data/raw_seurat/PDX_dead.rds")
 
 
 
@@ -173,25 +169,26 @@ edit_objects <- function(seurat,
 # B : low mito 
 
 # Apoptotic
+dim(apoptotic_isolated)
 apoptotic_reduced <- edit_objects(apoptotic_isolated, "apoptotic_isolated", method = "UMAP", reduce = FALSE)
-apoptotic_reduced$damaged_population <- ifelse(apoptotic_reduced$seurat_clusters %in% c(0, 3, 6), "B", "A")
+apoptotic_reduced$damaged_population <- ifelse(apoptotic_reduced$seurat_clusters %in% c(1, 2, 5, 6), "B", "A")
 
 # Pro-apoptotic
 pro_apoptotic_reduced <- edit_objects(pro_apoptotic_isolated, "pro_apoptotic_isolated",  method = "UMAP", reduce = FALSE)
-pro_apoptotic_reduced$damaged_population <- ifelse(pro_apoptotic_reduced$seurat_clusters %in% c(2, 7, 8), "B", "A")
+pro_apoptotic_reduced$damaged_population <- ifelse(pro_apoptotic_reduced$seurat_clusters %in% c(2, 5, 10), "B", "A")
 
 # GM18607 dead
 dead_SA928_reduced <- edit_objects(dead_SA928_isolated, "dead_SA928_isolated", method = "UMAP", reduce = FALSE, meta_data_edit = TRUE)
-dead_SA928_reduced$damaged_population <- ifelse(dead_SA928_reduced$seurat_clusters %in% c(1, 4, 7, 8), "B", "A")
+dead_SA928_reduced$damaged_population <- ifelse(dead_SA928_reduced$seurat_clusters %in% c(1, 4, 6, 8), "B", "A")
 
 # GM18607 dying
 dying_SA928_reduced <- edit_objects(dying_SA928_isolated, "dying_SA928_isolated", method = "UMAP", reduce = FALSE, meta_data_edit = TRUE)
-dying_SA928_reduced$damaged_population <- ifelse(dying_SA928_reduced$seurat_clusters %in% c(1, 5), "A", "B")
+dying_SA928_reduced$damaged_population <- ifelse(dying_SA928_reduced$seurat_clusters %in% c(2, 5), "A", "B")
 
 
 # PDX dead 
 dead_SA604_reduced  <- edit_objects(dead_SA604_isolated, "dead_SA604_isolated", method = "UMAP", reduce = FALSE, meta_data_edit = TRUE)
-dead_SA604_reduced$damaged_population <- ifelse(dead_SA604_reduced $seurat_clusters %in% c(0,3,4), "A", "B")
+dead_SA604_reduced$damaged_population <- ifelse(dead_SA604_reduced $seurat_clusters %in% c(0, 2, 5), "B", "A")
 
 
 #-------------------------------------------------------------------------------
@@ -200,9 +197,6 @@ dead_SA604_reduced$damaged_population <- ifelse(dead_SA604_reduced $seurat_clust
 
 # Plotting damaged in isolation, annotating clusters for plotting  -------
 
-# Plotting preparations 
-damage_colours <- c("A" = "lightgrey", 
-                    "B" = "#8DC5BD") # "#CF9EBB") 
 
 # Function to specify plotting criteria
 MyDimPlot <- function(seurat, 
@@ -210,9 +204,10 @@ MyDimPlot <- function(seurat,
                       colours = damage_colours, 
                       project_name,
                       pt.size = 1,
-                      output = "/home/alicen/Projects/ReviewArticle/isolated_damaged/" ){
+                      output = "./D_Summarise_Results /img/isolated_damaged/" ){
   
-  feature_plot <- FeaturePlot(seurat,
+  # Mitochondrial percentage
+  mt_feature_plot <- FeaturePlot(seurat,
                           reduction = "umap",
                           features = "mt.percent",
                           pt.size = pt.size,
@@ -225,6 +220,56 @@ MyDimPlot <- function(seurat,
           panel.border = element_rect(colour = "black", fill=NA, linewidth = 1),
           legend.position = "left")
   
+  # Ribosomal percentage
+  rb_feature_plot <- FeaturePlot(seurat,
+                              reduction = "umap",
+                              features = "rb.percent",
+                              pt.size = pt.size,
+                              cols = c("#E7E7E7", "#B07D9A")
+  ) +
+    NoAxes() + 
+    xlab("UMAP 1") + ylab("UMAP 2") +
+    theme(plot.title = element_blank(),
+          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
+          panel.border = element_rect(colour = "black", fill=NA, linewidth = 1),
+          legend.position = "left")
+  
+  
+  # Library size 
+  library_feature_plot <- FeaturePlot(seurat,
+                                 reduction = "umap",
+                                 features = "nFeature_RNA",
+                                 pt.size = pt.size,
+                                 cols = c("#E6E6E6", "#7F7F7F")
+  ) +
+    NoAxes() + 
+    xlab("UMAP 1") + ylab("UMAP 2") +
+    theme(plot.title = element_blank(),
+          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
+          panel.border = element_rect(colour = "black", fill=NA, linewidth = 1),
+          legend.position = "left")
+  
+  # MALAT1
+  seurat$malat1 <- FetchData(seurat, vars = "MALAT1")
+  malat1_feature_plot <- FeaturePlot(seurat,
+                                      reduction = "umap",
+                                      features = "malat1",
+                                      pt.size = pt.size,
+                                      cols = c("#E6E6E6", "#B07D9A")
+  ) +
+    NoAxes() + 
+    xlab("UMAP 1") + ylab("UMAP 2") +
+    theme(plot.title = element_blank(),
+          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
+          panel.border = element_rect(colour = "black", fill=NA, linewidth = 1),
+          legend.position = "left")
+  
+  
+  
+  # Labels 
+  # Plotting preparations 
+  damage_colours <- c("A" = "lightgrey", 
+                      "B" = "#8DC5BD") # "#CF9EBB") 
   
   cluster_plot <- DimPlot(seurat,
           reduction = "umap",
@@ -244,24 +289,52 @@ MyDimPlot <- function(seurat,
           plot.subtitle = element_text(hjust = 0.5, vjust = 1),
           panel.border = element_rect(colour = "black", fill=NA, linewidth = 1))
   
-  combined <- feature_plot | cluster_plot
+  combined <- mt_feature_plot | library_feature_plot  | rb_feature_plot | malat1_feature_plot |  cluster_plot 
   
   # View and save 
   print(combined)
   ggsave(filename = paste0(output, project_name, ".png"),
          plot = combined,
-         width = 6.4, height = 2.8, units = "in")
+         width = 10, height = 3.6, units = "in")
   
   
-  return(combined)
-  
+  return(list(mt_feature = mt_feature_plot, 
+              rb_feature = rb_feature_plot, 
+              malat1_feature = malat1_feature_plot, 
+              library_feature = library_feature_plot, 
+              cluster_plot = cluster_plot
+              ))
 }
 
-MyDimPlot(apoptotic_reduced, project_name = "apoptotic")
-MyDimPlot(pro_apoptotic_reduced, project_name = "pro_apoptotic")
-MyDimPlot(dead_SA928_reduced, project_name = "dead_SA928", pt.size = 1.7)
-MyDimPlot(dying_SA928_reduced, project_name = "dying_SA928", pt.size = 1.7)
-MyDimPlot(dead_SA604_reduced, project_name = "dead_SA604", pt.size = 1.7)
+apoptotic_plots <- MyDimPlot(apoptotic_reduced, project_name = "apoptotic")
+pro_apoptotic_plots <- MyDimPlot(pro_apoptotic_reduced, project_name = "pro_apoptotic")
+SA928_plots <- MyDimPlot(seurat = dead_SA928_reduced, project_name = "dead_SA928", pt.size = 1.7)
+SA928_dying_plots <- MyDimPlot(dying_SA928_reduced, project_name = "dying_SA928", pt.size = 1.7)
+SA604_plots <- MyDimPlot(dead_SA604_reduced, project_name = "dead_SA604", pt.size = 1.7)
+
+
+mt_plots <- apoptotic_plots$mt_feature | (pro_apoptotic_plots$mt_feature + NoLegend()) | (SA928_plots$mt_feature + NoLegend()) | (SA928_dying_plots$mt_feature + NoLegend())| (SA604_plots$mt_feature + NoLegend())
+rb_plots <- apoptotic_plots$rb_feature | (pro_apoptotic_plots$rb_feature + NoLegend()) | (SA928_plots$rb_feature + NoLegend()) | (SA928_dying_plots$rb_feature + NoLegend())| (SA604_plots$rb_feature + NoLegend())
+library_plots <- apoptotic_plots$library_feature | (pro_apoptotic_plots$library_feature + NoLegend()) | (SA928_plots$library_feature + NoLegend()) | (SA928_dying_plots$library_feature + NoLegend()) | (SA604_plots$library_feature + NoLegend())
+cluster_plots <- apoptotic_plots$cluster_plot | (pro_apoptotic_plots$cluster_plot + NoLegend()) | (SA928_plots$cluster_plot + NoLegend()) | (SA928_dying_plots$cluster_plot + NoLegend()) | (SA604_plots$cluster_plot + NoLegend())
+
+
+
+ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/mt_plots.png",
+       plot = mt_plots,
+       width = 14, height = 2.8, units = "in")
+
+ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/rb_plots.png",
+       plot = rb_plots,
+       width = 14, height = 2.8, units = "in")
+
+ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/library_plots.png",
+       plot = library_plots,
+       width = 14, height = 2.8, units = "in")
+
+ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/cluster_plots.png",
+       plot = cluster_plots,
+       width = 14, height = 2.8, units = "in")
 
 
 #-------------------------------------------------------------------------------
@@ -271,11 +344,11 @@ MyDimPlot(dead_SA604_reduced, project_name = "dead_SA604", pt.size = 1.7)
 # Proportion of damaged cells detected in each population  -------
 
 # Load tool output 
-apoptotic_tool_output <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_apoptotic.csv")
-pro_apoptotic_tool_output <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_proapoptotic.csv")
-GM18507_dead_tool_output <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dead.csv")
-GM18507_dying_tool_output <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dying.csv")
-PDX_tool_output <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.csv")
+apoptotic_tool_output <- read.csv("./C_Test_Strategies/data/benchmark_output/HEK293_apoptotic.csv")
+pro_apoptotic_tool_output <- read.csv("./C_Test_Strategies/data/benchmark_output/HEK293_proapoptotic.csv")
+GM18507_dead_tool_output <- read.csv("./C_Test_Strategies/data/benchmark_output/GM18507_dead.csv")
+GM18507_dying_tool_output <- read.csv("./C_Test_Strategies/data/benchmark_output/GM18507_dying.csv")
+PDX_tool_output <- read.csv("./C_Test_Strategies/data/benchmark_output/PDX_dead.csv")
 
 
 # Function to count the proportion of each population detected by the tools ( population-specific detected cells / size of population )
@@ -289,11 +362,17 @@ find_damaged_population_detected <- function(seurat,
     # Extract barcodes of the damaged population of interest
     population_A <- subset(seurat, damaged_population == "A") 
     population_A$barcode <-  rownames(population_A@meta.data)
-    population_A <- as.character(sub(".*_(.*)", "\\1", population_A$barcode))
+    population_A <- str_extract( population_A$barcode, "(?<=_)[A-Z]+(?=-)")
     
     population_B <- subset(seurat, damaged_population == "B")
     population_B$barcode <-  rownames(population_B@meta.data)
-    population_B <- as.character(sub(".*_(.*)", "\\1", population_B$barcode))
+    population_B <- str_extract( population_B$barcode, "(?<=_)[A-Z]+(?=-)")
+    
+    # Add to the tool comparison output 
+    tool_output$barcode <- str_extract(tool_output$X, "(?<=__)[A-Z]+(?=-)")
+    tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_A, "A", "-")
+    tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_B, "B", tool_output$damaged_population)
+    
     
   } else {
     
@@ -303,17 +382,17 @@ find_damaged_population_detected <- function(seurat,
     population_B <- subset(seurat, damaged_population == "B") 
     population_B <- rownames(population_B@meta.data)
     
+    # Add to the tool comparison output 
+    tool_output$barcode <- str_extract(tool_output$X, "(?<=_)[A-Z]+(?=_)")
+    tool_output$damaged_population <- ifelse( tool_output$barcode %in% population_A, "A", "-")
+    tool_output$damaged_population <- ifelse( tool_output$barcode %in% population_B, "B", tool_output$damaged_population)
+    
   }
     
-  # Add to the tool comparison output 
-  tool_output$barcode <- sub(".*_(.*)", "\\1", tool_output$X)
-    
-  tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_A, "A", "-")
-  tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_B, "B", tool_output$damaged_population)
+
+  methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+               "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
   
-  
-  methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",      
-               "manual_all", "manual_mito_ribo","manual_mito","manual_malat1","manual_mito_isolated")
   
   detected_proportions <- data.frame(Method = character(),
                                      Population_A = numeric(), 
@@ -345,9 +424,9 @@ find_damaged_population_detected <- function(seurat,
 }
 
 
-apoptotic_tool_proportions <- find_damaged_population_detected(apoptotic_reduced, apoptotic_tool_output)
+apoptotic_tool_proportions <- find_damaged_population_detected(seurat = apoptotic_reduced, tool_output = apoptotic_tool_output)
 pro_apoptotic_tool_proportions <- find_damaged_population_detected(pro_apoptotic_reduced, pro_apoptotic_tool_output)
-dead_SA928_tool_proportions <- find_damaged_population_detected(dead_SA928_reduced, GM18507_dead_tool_output, special = TRUE)
+dead_SA928_tool_proportions <- find_damaged_population_detected(seurat = dead_SA928_reduced, tool_output = GM18507_dead_tool_output, special = TRUE)
 dying_SA928_tool_proportions <- find_damaged_population_detected(dying_SA928_reduced, GM18507_dying_tool_output, special = TRUE)
 dead_SA604_tool_proportions <- find_damaged_population_detected(dead_SA604_reduced, PDX_tool_output, special = TRUE)
 
@@ -364,11 +443,17 @@ find_damaged_popoulation_proportion <- function(seurat,
     # Extract barcodes of the damaged population of interest
     population_A <- subset(seurat, damaged_population == "A") 
     population_A$barcode <-  rownames(population_A@meta.data)
-    population_A <- as.character(sub(".*_(.*)", "\\1", population_A$barcode))
+    population_A <- str_extract( population_A$barcode, "(?<=_)[A-Z]+(?=-)")
     
     population_B <- subset(seurat, damaged_population == "B")
     population_B$barcode <-  rownames(population_B@meta.data)
-    population_B <- as.character(sub(".*_(.*)", "\\1", population_B$barcode))
+    population_B <- str_extract( population_B$barcode, "(?<=_)[A-Z]+(?=-)")
+    
+    # Add to the tool comparison output 
+    tool_output$barcode <- str_extract(tool_output$X, "(?<=__)[A-Z]+(?=-)")
+    tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_A, "A", "-")
+    tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_B, "B", tool_output$damaged_population)
+    
     
   } else {
     
@@ -378,17 +463,16 @@ find_damaged_popoulation_proportion <- function(seurat,
     population_B <- subset(seurat, damaged_population == "B") 
     population_B <- rownames(population_B@meta.data)
     
+    # Add to the tool comparison output 
+    tool_output$barcode <- str_extract(tool_output$X, "(?<=_)[A-Z]+(?=_)")
+    tool_output$damaged_population <- ifelse( tool_output$barcode %in% population_A, "A", "-")
+    tool_output$damaged_population <- ifelse( tool_output$barcode %in% population_B, "B", tool_output$damaged_population)
+    
   }
   
-  # Add to the tool comparison output 
-  tool_output$barcode <- sub(".*_(.*)", "\\1", tool_output$X)
+  methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+               "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
   
-  tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_A, "A", "-")
-  tool_output$damaged_population <- ifelse(tool_output$barcode %in% population_B, "B", tool_output$damaged_population)
-  
-  
-  methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",      
-               "manual_all", "manual_mito_ribo","manual_mito","manual_malat1","manual_mito_isolated")
   
   if (focus){
   
@@ -461,7 +545,7 @@ find_damaged_popoulation_proportion <- function(seurat,
 }
 
 
-apoptotic_tool_proportions_alt <- find_damaged_popoulation_proportion(apoptotic_reduced, apoptotic_tool_output)
+apoptotic_tool_proportions_alt <- find_damaged_popoulation_proportion(seurat = apoptotic_reduced, tool_output = apoptotic_tool_output)
 pro_apoptotic_tool_proportions_alt <- find_damaged_popoulation_proportion(pro_apoptotic_reduced, pro_apoptotic_tool_output)
 dead_SA928_tool_proportions_alt <- find_damaged_popoulation_proportion(dead_SA928_reduced, GM18507_dead_tool_output, special = TRUE)
 dying_SA928_tool_proportions_alt <- find_damaged_popoulation_proportion(dying_SA928_reduced, GM18507_dying_tool_output, special = TRUE)
@@ -475,12 +559,11 @@ dead_SA604_tool_proportions_alt <- find_damaged_popoulation_proportion(dead_SA60
 
 plot_propotions <- function(data, 
                             project_name,
-                            output = "/home/alicen/Projects/ReviewArticle/isolated_damaged/" ){
+                            output = "./D_Summarise_Results /img/isolated_damaged/" ){
 
-  strategy_order <- c(
-    "ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
-    "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
-  )
+  strategy_order <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+                      "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
+  
   
   data$Method <- factor(data$Method, levels = strategy_order)
   data <- data[order(data$Method), ]
@@ -535,12 +618,11 @@ plot_propotions(dead_SA604_tool_proportions, "dead_SA604")
 plot_proportions_alt <- function(data, 
                                  project_name,
                                  focus = FALSE,  # Whether to include other categories, or not and 'focus' on population A and B
-                                 output = "/home/alicen/Projects/ReviewArticle/isolated_damaged/") {
+                                 output = "./D_Summarise_Results /img/isolated_damaged/") {
   
-  strategy_order <- c(
-    "ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
-    "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
-  )
+  strategy_order <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
+                      "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
+  
   
   data$Method <- factor(data$Method, levels = strategy_order)
   data <- data[order(data$Method), ]
@@ -575,7 +657,7 @@ plot_proportions_alt <- function(data,
   
   ggsave(filename = paste0(output, project_name, "_proportions_stacks.png"),
          plot = combined_plot,
-         width = 7, height = 5, units = "in")
+         width = 6, height = 5, units = "in")
   
   } else {
     
@@ -607,7 +689,7 @@ plot_proportions_alt <- function(data,
     
     ggsave(filename = paste0(output, project_name, "_proportions_stacks_focused.png"),
            plot = combined_plot,
-           width = 7, height = 5, units = "in")
+           width = 6, height = 5, units = "in")
     
   }
 
@@ -623,4 +705,3 @@ plot_proportions_alt(dead_SA604_tool_proportions_alt, "dead_SA604")
 
 
 ### End
-
