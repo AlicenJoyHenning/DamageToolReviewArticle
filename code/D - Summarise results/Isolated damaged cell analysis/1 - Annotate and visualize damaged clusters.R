@@ -220,6 +220,28 @@ MyDimPlot <- function(seurat,
           panel.border = element_rect(colour = "black", fill=NA, linewidth = 1),
           legend.position = "left")
   
+  
+  cluster_colours <- c("A" = "#E6E6E6",
+                       "B" = "#001E5C")
+  
+  mt_violin <- VlnPlot(
+    seurat, 
+    pt.size = 0, 
+    features = c("mt.percent"), 
+    group.by = "damaged_population"
+  ) + 
+    scale_fill_manual(values = cluster_colours) +
+    theme(
+      axis.text = element_blank(), 
+      axis.text.x = element_blank(),  
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),     
+      plot.title = element_blank(),         
+      panel.border = element_rect(color = "black", fill = NA) 
+    )
+  
+  
+  
   # Ribosomal percentage
   rb_feature_plot <- FeaturePlot(seurat,
                               reduction = "umap",
@@ -233,6 +255,22 @@ MyDimPlot <- function(seurat,
           plot.subtitle = element_text(hjust = 0.5, vjust = 1),
           panel.border = element_rect(colour = "black", fill=NA, linewidth = 1),
           legend.position = "left")
+  
+  rb_violin <- VlnPlot(
+    seurat, 
+    pt.size = 0, 
+    features = c("rb.percent"), 
+    group.by = "damaged_population"
+  ) + 
+    scale_fill_manual(values = cluster_colours) +
+    theme(
+      axis.text = element_blank(), 
+      axis.text.x = element_blank(),  
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),     
+      plot.title = element_blank(),         
+      panel.border = element_rect(color = "black", fill = NA) 
+    )
   
   
   # Library size 
@@ -249,27 +287,71 @@ MyDimPlot <- function(seurat,
           panel.border = element_rect(colour = "black", fill=NA, linewidth = 1),
           legend.position = "left")
   
+  
+  # Log transform library size
+  seurat$library <- log10(seurat$nFeature_RNA)
+  
+  library_violin <- VlnPlot(
+    seurat, 
+    pt.size = 0, 
+    features = c("library"), 
+    group.by = "damaged_population"
+  ) + 
+    scale_fill_manual(values = cluster_colours) +
+    theme(
+      axis.text = element_blank(), 
+      axis.text.x = element_blank(),  
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),     
+      plot.title = element_blank(),         
+      panel.border = element_rect(color = "black", fill = NA) 
+    )
+  
   # MALAT1
-  seurat$malat1 <- FetchData(seurat, vars = "MALAT1")
-  malat1_feature_plot <- FeaturePlot(seurat,
-                                      reduction = "umap",
-                                      features = "malat1",
-                                      pt.size = pt.size,
-                                      cols = c("#E6E6E6", "#B07D9A")
-  ) +
-    NoAxes() + 
-    xlab("UMAP 1") + ylab("UMAP 2") +
-    theme(plot.title = element_blank(),
-          plot.subtitle = element_text(hjust = 0.5, vjust = 1),
-          panel.border = element_rect(colour = "black", fill=NA, linewidth = 1),
-          legend.position = "left")
+  seurat$malat1.percent <- PercentageFeatureSet(
+    object   = seurat,
+    features = "MALAT1",
+    assay    = "RNA"
+  ) 
+  
+  
+  # malat1_feature_plot <- FeaturePlot(seurat,
+  #                                     reduction = "umap",
+  #                                     features = "MALAT1",
+  #                                     pt.size = pt.size,
+  #                                     cols = c("#E6E6E6", "#B07D9A")
+  # ) +
+  #   NoAxes() + 
+  #   xlab("UMAP 1") + ylab("UMAP 2") +
+  #   theme(plot.title = element_blank(),
+  #         plot.subtitle = element_text(hjust = 0.5, vjust = 1),
+  #         panel.border = element_rect(colour = "black", fill=NA, linewidth = 1),
+  #         legend.position = "left")
+  
+  
+  
+  malat1_violin <- VlnPlot(
+    seurat, 
+    pt.size = 0, 
+    features = c("malat1.percent"), 
+    group.by = "damaged_population"
+  ) + 
+    scale_fill_manual(values = cluster_colours) +
+    theme(
+      axis.text = element_blank(), 
+      axis.text.x = element_blank(),  
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),     
+      plot.title = element_blank(),         
+      panel.border = element_rect(color = "black", fill = NA) 
+    )
   
   
   
   # Labels 
   # Plotting preparations 
-  damage_colours <- c("A" = "lightgrey", 
-                      "B" = "#8DC5BD") # "#CF9EBB") 
+  damage_colours <- c("A" = "#E6E6E6",
+                     "B" = "#001E5C")
   
   cluster_plot <- DimPlot(seurat,
           reduction = "umap",
@@ -289,7 +371,7 @@ MyDimPlot <- function(seurat,
           plot.subtitle = element_text(hjust = 0.5, vjust = 1),
           panel.border = element_rect(colour = "black", fill=NA, linewidth = 1))
   
-  combined <- mt_feature_plot | library_feature_plot  | rb_feature_plot | malat1_feature_plot |  cluster_plot 
+  combined <- mt_feature_plot | library_feature_plot  | rb_feature_plot | cluster_plot 
   
   # View and save 
   print(combined)
@@ -299,12 +381,18 @@ MyDimPlot <- function(seurat,
   
   
   return(list(mt_feature = mt_feature_plot, 
+              mt_violin = mt_violin, 
               rb_feature = rb_feature_plot, 
-              malat1_feature = malat1_feature_plot, 
+              rb_violin = rb_violin,
+             # malat1_feature = malat1_feature_plot, 
+              malat1_violin = malat1_violin,
               library_feature = library_feature_plot, 
+              library_violin = library_violin,
               cluster_plot = cluster_plot
               ))
 }
+
+
 
 apoptotic_plots <- MyDimPlot(apoptotic_reduced, project_name = "apoptotic")
 pro_apoptotic_plots <- MyDimPlot(pro_apoptotic_reduced, project_name = "pro_apoptotic")
@@ -312,12 +400,11 @@ SA928_plots <- MyDimPlot(seurat = dead_SA928_reduced, project_name = "dead_SA928
 SA928_dying_plots <- MyDimPlot(dying_SA928_reduced, project_name = "dying_SA928", pt.size = 1.7)
 SA604_plots <- MyDimPlot(dead_SA604_reduced, project_name = "dead_SA604", pt.size = 1.7)
 
-
+# Dimplots 
 mt_plots <- apoptotic_plots$mt_feature | (pro_apoptotic_plots$mt_feature + NoLegend()) | (SA928_plots$mt_feature + NoLegend()) | (SA928_dying_plots$mt_feature + NoLegend())| (SA604_plots$mt_feature + NoLegend())
 rb_plots <- apoptotic_plots$rb_feature | (pro_apoptotic_plots$rb_feature + NoLegend()) | (SA928_plots$rb_feature + NoLegend()) | (SA928_dying_plots$rb_feature + NoLegend())| (SA604_plots$rb_feature + NoLegend())
 library_plots <- apoptotic_plots$library_feature | (pro_apoptotic_plots$library_feature + NoLegend()) | (SA928_plots$library_feature + NoLegend()) | (SA928_dying_plots$library_feature + NoLegend()) | (SA604_plots$library_feature + NoLegend())
 cluster_plots <- apoptotic_plots$cluster_plot | (pro_apoptotic_plots$cluster_plot + NoLegend()) | (SA928_plots$cluster_plot + NoLegend()) | (SA928_dying_plots$cluster_plot + NoLegend()) | (SA604_plots$cluster_plot + NoLegend())
-
 
 
 ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/mt_plots.png",
@@ -330,6 +417,35 @@ ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/rb_plots.png",
 
 ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/library_plots.png",
        plot = library_plots,
+       width = 14, height = 2.8, units = "in")
+
+ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/cluster_plots.png",
+       plot = cluster_plots,
+       width = 14, height = 2.8, units = "in")
+
+# Violin plots 
+mt_plots <- (apoptotic_plots$mt_violin + NoLegend()) | (pro_apoptotic_plots$mt_violin + NoLegend()) | (SA928_plots$mt_violin + NoLegend()) | (SA928_dying_plots$mt_violin + NoLegend())| (SA604_plots$mt_violin + NoLegend())
+rb_plots <- (apoptotic_plots$rb_violin + NoLegend()) | (pro_apoptotic_plots$rb_violin + NoLegend()) | (SA928_plots$rb_violin + NoLegend()) | (SA928_dying_plots$rb_violin + NoLegend())| (SA604_plots$rb_violin + NoLegend())
+malat1_plots <- (apoptotic_plots$malat1_violin + NoLegend()) | (pro_apoptotic_plots$malat1_violin + NoLegend()) | (SA928_plots$malat1_violin + NoLegend()) | (SA928_dying_plots$malat1_violin + NoLegend())| (SA604_plots$malat1_violin + NoLegend())
+library_plots <- (apoptotic_plots$library_violin + NoLegend()) | (pro_apoptotic_plots$library_violin + NoLegend()) | (SA928_plots$library_violin + NoLegend()) | (SA928_dying_plots$library_violin + NoLegend()) | (SA604_plots$library_violin + NoLegend())
+cluster_plots <- (apoptotic_plots$cluster_plot) | (pro_apoptotic_plots$cluster_plot + NoLegend()) | (SA928_plots$cluster_plot + NoLegend()) | (SA928_dying_plots$cluster_plot + NoLegend()) | (SA604_plots$cluster_plot + NoLegend())
+
+
+
+ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/mt_violins.png",
+       plot = mt_plots,
+       width = 14, height = 2.8, units = "in")
+
+ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/rb_violins.png",
+       plot = rb_plots,
+       width = 14, height = 2.8, units = "in")
+
+ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/library_violins.png",
+       plot = library_plots,
+       width = 14, height = 2.8, units = "in")
+
+ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/malat1_violins.png",
+       plot = malat1_plots,
        width = 14, height = 2.8, units = "in")
 
 ggsave(filename = "./D_Summarise_Results /img/isolated_damaged/cluster_plots.png",
@@ -579,7 +695,7 @@ plot_propotions <- function(data,
   combined_plot <- ggplot(data_long, 
                           aes(y = Method, x = Value, fill = Population)) +
     geom_bar(stat = "identity") +
-    scale_fill_manual(values = c("Population_A" = "#D3D3D3", "Population_B" = "#8DC5BD")) +
+    scale_fill_manual(values = c("Population_A" = "#E6E6E6", "Population_B" = "#001E5C")) +
     labs(title = "",
          x = "",
          y = "") +
@@ -639,7 +755,7 @@ plot_proportions_alt <- function(data,
   combined_plot <- ggplot(data_long, 
                           aes(x = Value, y = Method, fill = Population)) +
     geom_bar(stat = "identity") +
-    scale_fill_manual(values = c("Population_A" = "#D3D3D3", "Population_B" = "#8DC5BD", "Population_other" = "#808C98")) +
+    scale_fill_manual(values = c("Population_A" = "#E6E6E6", "Population_B" = "#001E5C", "Population_other" = "#808C98")) +
     labs(title = "",
          x = "",
          y = "") +
@@ -671,7 +787,7 @@ plot_proportions_alt <- function(data,
     combined_plot <- ggplot(data_long, 
                             aes(x = Value, y = Method, fill = Population)) +
       geom_bar(stat = "identity") +
-      scale_fill_manual(values = c("Population_A" = "#D3D3D3", "Population_B" = "#8DC5BD")) + 
+      scale_fill_manual(values = c("Population_A" = "#E6E6E6", "Population_B" = "#001E5C")) + 
       labs(title = "",
            x = "",
            y = "") +
@@ -689,7 +805,7 @@ plot_proportions_alt <- function(data,
     
     ggsave(filename = paste0(output, project_name, "_proportions_stacks_focused.png"),
            plot = combined_plot,
-           width = 6, height = 5, units = "in")
+           width = 7, height = 8, units = "in")
     
   }
 
@@ -705,3 +821,4 @@ plot_proportions_alt(dead_SA604_tool_proportions_alt, "dead_SA604")
 
 
 ### End
+
