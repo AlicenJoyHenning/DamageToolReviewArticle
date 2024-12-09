@@ -9,7 +9,6 @@
 # 3. Precision-recall area under the curve (PR-AUC)
 
 
-
 #-------------------------------------------------------------------------------
 # PREPARATIONS
 #-------------------------------------------------------------------------------
@@ -23,12 +22,17 @@ for (pkg in packages) {
   }
 }
 
-# Load datasets (5 cases)
-apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_apoptotic.csv")
-pro_apoptotic <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/HEK293_proapoptotic.csv")
-GM18507_dead <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dead.csv")
-GM18507_dying <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/GM18507_dying.csv")
-PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.csv")
+# Set working directory to Zenodo download
+setwd("/Users/alicen/Projects/ReviewArticle/Zenodo")
+
+
+# Load datasets (5 cases) - note after SampleQC different to after benchmarking for some 
+apoptotic <- read.csv("./C_Test_Strategies/data/benchmark_output/HEK293_apoptotic.csv")
+pro_apoptotic <- read.csv("./C_Test_Strategies/data/benchmark_output/HEK293_proapoptotic.csv")
+GM18507_dead <- read.csv("./C_Test_Strategies/data/benchmark_output/GM18507_dead.csv")
+GM18507_dying <- read.csv("./C_Test_Strategies/data/benchmark_output/GM18507_dying.csv")
+PDX <- read.csv("./C_Test_Strategies/data/benchmark_output/PDX_dead.csv")
+
 
 #-------------------------------------------------------------------------------
 # PERFORMANCE METRICS
@@ -38,12 +42,11 @@ PDX <- read.csv("/home/alicen/Projects/ReviewArticle/benchmark_results/PDX_dead.
 
 # List of methods
 methods <- c("ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC",  "scater",  "valiDrops", 
-             "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated")
-
+             "manual_fixed_mito", "manual_adaptive_mito", "manual_mito_ribo",  "manual_mito_ribo_library", "manual_library", "manual_malat1", "manual_malat1_mito_ribo")
 # Input structure
 input_list <- list(
   list(name = "apoptotic", df = apoptotic, TP = "HEK293_apoptotic", TN = "HEK293_control"),
-  list(name = "proapoptotic", df = pro_apoptotic, TP = "HEK293_proapoptotic", TN = "HEK293_control"),
+  list(name = "pro_apoptotic", df = pro_apoptotic, TP = "HEK293_proapoptotic", TN = "HEK293_control"),
   list(name = "GM18507_dead", df = GM18507_dead, TP = "GM18507_dead", TN = "GM18507_control"),
   list(name = "GM18507_dying", df = GM18507_dying, TP = "GM18507_dying", TN = "GM18507_control"),
   list(name = "PDX", df = PDX, TP = "PDX_dead", TN = "PDX_control")
@@ -67,9 +70,8 @@ results <- data.frame(dataset = character(),
 # Define a small epsilon value to avoid division by zero
 epsilon <- 1e-10
 
-# Function to calculate precision with bootstrapped CIs (1000 bootstraps)
+# Corrected precision function
 calc_precision_ci <- function(TP_count, FP_count, n_bootstraps = 1000, epsilon = 1e-10) {
-  
   precisions <- numeric(n_bootstraps)
   
   for (i in 1:n_bootstraps) {
@@ -84,22 +86,22 @@ calc_precision_ci <- function(TP_count, FP_count, n_bootstraps = 1000, epsilon =
   return(c(precision_mean, precision_lower, precision_upper))
 }
 
-# Function to calculate FNR with bootstrapped CIs (1000 bootstraps)
-calc_fnr_ci <- function(TP_count, FN_count, n_bootstraps = 1000, epsilon = 1e-10) {
-  fnrs <- numeric(n_bootstraps)
+# Corrected TPR (true positive rate) function
+calc_tpr_ci <- function(TP_count, FN_count, n_bootstraps = 1000, epsilon = 1e-10) {
+  tprs <- numeric(n_bootstraps)
   for (i in 1:n_bootstraps) {
     # Bootstrap resampling
     TP_resample <- rbinom(1, TP_count + FN_count, TP_count / (TP_count + FN_count + epsilon))
     FN_resample <- (TP_count + FN_count) - TP_resample
-    fnrs[i] <- FN_resample / (TP_resample + FN_resample + epsilon)
+    tprs[i] <- TP_resample / (TP_resample + FN_resample + epsilon)
   }
-  fnr_mean <- mean(fnrs, na.rm = TRUE)
-  fnr_lower <- quantile(fnrs, 0.025, na.rm = TRUE)
-  fnr_upper <- quantile(fnrs, 0.975, na.rm = TRUE)
-  return(c(fnr_mean, fnr_lower, fnr_upper))
+  tpr_mean <- mean(tprs, na.rm = TRUE)
+  tpr_lower <- quantile(tprs, 0.025, na.rm = TRUE)
+  tpr_upper <- quantile(tprs, 0.975, na.rm = TRUE)
+  return(c(tpr_mean, tpr_lower, tpr_upper))
 }
 
-# Function to calculate PR-AUC with bootstrapped CIs (1000 bootstraps)
+# Corrected PR-AUC function
 calc_pr_auc_ci <- function(scores, labels, n_bootstraps = 1000) {
   aucs <- numeric(n_bootstraps)
   for (i in 1:n_bootstraps) {
@@ -114,14 +116,10 @@ calc_pr_auc_ci <- function(scores, labels, n_bootstraps = 1000) {
   return(c(auc_mean, auc_lower, auc_upper))
 }
 
-
-# Initialize a list to store PR-AUC curve data
-pr_auc_curves <- list()
-
-# Calculate precision, FNR, and PR-AUC for each strategy for each dataset
+# Loop through datasets and methods
 for (item in input_list) {
   
-  # Extract components of the list 
+  # Extract components
   df <- item$df
   TP <- item$TP
   TN <- item$TN
@@ -129,82 +127,92 @@ for (item in input_list) {
   
   # Loop through each method
   for (method in methods) {
-    
-    cat("\n")
     message(method, " ...")
     
+    # Define method outcomes
     df$method_outcome <- "na"
-    
-    # Assign method_outcome based on conditions
     df$method_outcome <- ifelse(df$orig.ident == TP & df[[method]] == "damaged", "true_positive", df$method_outcome)
     df$method_outcome <- ifelse(df$orig.ident == TP & df[[method]] == "cell", "false_negative", df$method_outcome)
     df$method_outcome <- ifelse(df$orig.ident == TN & df[[method]] == "cell", "true_negative", df$method_outcome)
     df$method_outcome <- ifelse(df$orig.ident == TN & df[[method]] == "damaged", "false_positive", df$method_outcome)
     
-    # Summarise for stats
+    # Summarize statistics
     outcome <- df %>% 
       group_by(method_outcome) %>%
       summarise(Count = n(), .groups = 'drop')
     
     # Extract confusion matrix counts 
-    TP_count <- outcome %>% dplyr::filter(method_outcome == "true_positive") %>% pull(Count)
-    FP_count <- outcome %>% dplyr::filter(method_outcome == "false_positive") %>% pull(Count)
-    FN_count <- outcome %>% dplyr::filter(method_outcome == "false_negative") %>% pull(Count)
-    TN_count <- outcome %>% dplyr::filter(method_outcome == "true_negative") %>% pull(Count)
+    TP_count <- outcome %>% filter(method_outcome == "true_positive") %>% pull(Count)
+    FP_count <- outcome %>% filter(method_outcome == "false_positive") %>% pull(Count)
+    FN_count <- outcome %>% filter(method_outcome == "false_negative") %>% pull(Count)
+    TN_count <- outcome %>% filter(method_outcome == "true_negative") %>% pull(Count)
     
     TP_count <- ifelse(length(TP_count) == 0, 0, TP_count)
     FP_count <- ifelse(length(FP_count) == 0, 0, FP_count)
     FN_count <- ifelse(length(FN_count) == 0, 0, FN_count)
     TN_count <- ifelse(length(TN_count) == 0, 0, TN_count)
     
-    # Calculate precision and FNR with bootstrapped CIs
+    # Calculate metrics with bootstrapped CIs
     precision_ci <- calc_precision_ci(TP_count, FP_count)
-    fnr_ci <- calc_fnr_ci(TP_count, FN_count)
-    
-    # Calculate PR-AUC and its confidence interval using bootstrapping
+    tpr_ci <- calc_tpr_ci(TP_count, FN_count)
     scores <- c(rep(1, TP_count), rep(0, FN_count), rep(1, FP_count), rep(0, TN_count))
     labels <- c(rep(1, TP_count + FN_count), rep(0, FP_count + TN_count))
     pr_auc_ci <- calc_pr_auc_ci(scores, labels)
     
     # Store results
     results <- rbind(results, 
-                     data.frame(dataset = dataset_name, strategy = method, 
-                                precision = precision_ci[1], fnr = fnr_ci[1], pr_auc = pr_auc_ci[1], 
-                                precision_lower = precision_ci[2], precision_upper = precision_ci[3],
-                                fnr_lower = fnr_ci[2], fnr_upper = fnr_ci[3],
-                                pr_auc_lower = pr_auc_ci[2], pr_auc_upper = pr_auc_ci[3],
+                     data.frame(dataset = dataset_name, 
+                                strategy = method, 
+                                precision = precision_ci[1], 
+                                tpr = tpr_ci[1], 
+                                pr_auc = pr_auc_ci[1], 
+                                precision_lower = precision_ci[2], 
+                                precision_upper = precision_ci[3],
+                                tpr_lower = tpr_ci[2], 
+                                tpr_upper = tpr_ci[3],
+                                pr_auc_lower = pr_auc_ci[2], 
+                                pr_auc_upper = pr_auc_ci[3],
                                 stringsAsFactors = FALSE))
-    
-    
-    
-    # Calculate PR-AUC curve
-    if (method == "DropletQC") { next } else {
-      
-      scores <- c(rep(1, TP_count), rep(0, FN_count), rep(1, FP_count), rep(0, TN_count))
-      labels <- c(rep(1, TP_count + FN_count), rep(0, FP_count + TN_count))
-      pr <- pr.curve(scores.class0 = scores, weights.class0 = labels, curve = TRUE)
-      
-      # Store the curve data
-      pr_auc_curves[[paste0(dataset_name, "_", method)]] <- data.frame(
-        recall = pr$curve[, 1],
-        precision = pr$curve[, 2],
-        method = method,
-        dataset = dataset_name
-      )
-    
-    }
-    
   }
 }
 
+# Add positive prevalence measures -----
+
+# Before show PR-AUC values, find what the value would be for random guessing 
+datasets <- c("apoptotic", "pro_apoptotic", "GM18507_dead", "GM18507_dying", "PDX")
+combined_pr_auc_curves <- list()
+
+# Combine items of the same dataset together
+for (dataset in datasets) {
+  dataset_items <- pr_auc_curves[grep(paste0("^", dataset, "_"), names(pr_auc_curves))]
+  combined_pr_auc_curves[[dataset]] <- do.call(rbind, dataset_items)
+}
+
+# Find the positive prevalence for each dataset 
+positive_prevalence <- list()
+positive_prevalence$apoptotic <- table(apoptotic$orig.ident)[1] / (table(apoptotic$orig.ident)[1] + table(apoptotic$orig.ident)[2])
+positive_prevalence$pro_apoptotic <- table(pro_apoptotic$orig.ident)[2] / (table(pro_apoptotic$orig.ident)[1] + table(pro_apoptotic$orig.ident)[2])
+positive_prevalence$GM18507_dead <- table(GM18507_dead$orig.ident)[2] / (table(GM18507_dead$orig.ident)[2] + table(GM18507_dead$orig.ident)[1])
+positive_prevalence$GM18507_dying <- table(GM18507_dying$orig.ident)[2] / (table(GM18507_dying$orig.ident)[2] + table(GM18507_dying$orig.ident)[1])
+positive_prevalence$PDX <- table(PDX$orig.ident)[2] / (table(PDX$orig.ident)[2] + table(PDX$orig.ident)[1])
+
+# Convert positive_prevalence to a dataframe for easier plotting
+positive_prevalence_df <- data.frame(
+  dataset = names(positive_prevalence),
+  prevalence = unlist(positive_prevalence)
+)
+
+# Add to results 
+results <- merge(results, positive_prevalence_df, by = c("dataset"))
+View(results)
+
 # Save and view final results
 write.csv(results, 
-          file = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/groundtruth_performance.csv",
+          file = "./C_Test_Strategies/data/groundtruth_performance_metrics/groundtruth_performance.csv",
           quote = FALSE, 
           row.names = FALSE
 )
 
-View(results)
 
 #-------------------------------------------------------------------------------
 # RANKING PERFORMANCE PER METRIC
@@ -212,7 +220,7 @@ View(results)
 
 # Rank the tools per performance metric ----
 
-results_ordered <- results[, c("dataset", "strategy", "precision", "fnr", "pr_auc")]
+results_ordered <- results[, c("dataset", "strategy", "precision", "tpr", "pr_auc")]
 
 # Function to rank and assign points for precision
 rank_and_assign_points <- function(df, metric) {
@@ -229,10 +237,9 @@ precision_ranked <- rank_and_assign_points(ranked_results, "precision") %>%
   group_by(strategy) %>% 
   summarise(precision = sum(points))
 
-fnr_ranked <- rank_and_assign_points(ranked_results, "fnr") %>% 
+tpr_ranked <- rank_and_assign_points(ranked_results, "tpr") %>% 
   group_by(strategy) %>% 
-  summarise(fnr = sum(points))
-fnr_ranked$fnr <- 51 - fnr_ranked$fnr # inverse
+  summarise(tpr = sum(points))
 
 
 pr_auc_ranked <- rank_and_assign_points(ranked_results, "pr_auc") %>% 
@@ -240,95 +247,17 @@ pr_auc_ranked <- rank_and_assign_points(ranked_results, "pr_auc") %>%
   summarise(pr_auc = sum(points))
 
 
-ranked_results_output <- merge(precision_ranked, fnr_ranked, by = c("strategy"))
+ranked_results_output <- merge(precision_ranked, tpr_ranked, by = c("strategy"))
 ranked_results_output <- merge(ranked_results_output, pr_auc_ranked, by = c("strategy"))
 
 # Save and view final results
 write.csv(ranked_results_output, 
-          file = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/performance_ranked.csv",
+          file = "./C_Test_Strategies/data/groundtruth_performance_metrics/performance_ranked.csv",
           quote = FALSE, 
           row.names = FALSE
 )
 
 View(ranked_results_output)
-
-#-------------------------------------------------------------------------------
-# PLOT RANKS 
-#-------------------------------------------------------------------------------
-
-# Plot ranked performance bar graphs ----
-
-# Optional to read in results (if not in global environment)
-ranked_results <- read.csv(file = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/performance_ranked.csv")
-
-# Add ranking columns
-ranked_results <- ranked_results %>%
-  mutate(
-    precision_rank = rank(-precision, ties.method = "first"),
-    fnr_rank = rank(-fnr, ties.method = "first"),
-    pr_auc_rank = rank(-pr_auc, ties.method = "first")
-  )
-
-# Define the colors
-strategy_colours <- c(
-  "ddqc" = "#CE9DBA",
-  "DropletQC" = "#A799C9",
-  "ensembleKQC" = "#E7E4F6", 
-  "miQC" = "#808C98", 
-  "SampleQC" = "#CED5DB",
-  "scater" = "#88A1BD", 
-  "valiDrops" = "#D3E2F6",
-  "manual_all" = "#4F618F",
-  "manual_mito_isolated" = "#A6BEAE", 
-  "manual_mito" = "#DCECE2", 
-  "manual_mito_ribo" = "#9DBD78",
-  "manual_malat1" = "#D7E7BE"
-)
-
-# Define the order of strategies
-strategy_order <- c(
-  "ddqc", "DropletQC", "ensembleKQC", "miQC", "SampleQC", "scater", "valiDrops",
-  "manual_all", "manual_mito_isolated", "manual_mito", "manual_mito_ribo", "manual_malat1"
-)
-
-# Convert the strategy column to a factor with the specified order
-ranked_results$strategy <- factor(ranked_results$strategy, levels = strategy_order )
-
-# Define the common theme function
-rank_theme <- function() {
-  theme_classic() +  
-    theme(
-      axis.ticks = element_blank(), 
-      axis.text = element_blank(), 
-      axis.title = element_blank(),
-      legend.position = "none",
-      panel.border = element_rect(colour = "black", fill = NA),
-      plot.title = element_text(vjust = 1, hjust = 0.5, face = "bold", size = 16),
-      plot.margin = margin(20, 10, 10, 30)
-    )
-}
-
-# Create the plots
-ranked_precision <- ggplot(ranked_results, aes(x = strategy, y = precision, fill = strategy)) + 
-  geom_bar(stat = "identity") + 
-  geom_text(aes(label = precision_rank), vjust = -0.5) +
-  scale_fill_manual(values = strategy_colours) +  
-  labs(title = "Ranked Precision", y = "Precision") + 
-  rank_theme() + ylim(0, 45)
-
-ranked_fnr <- ggplot(ranked_results, aes(x = strategy, y = fnr, fill = strategy)) + 
-  geom_bar(stat = "identity") + 
-  geom_text(aes(label = fnr_rank), vjust = -0.5) +
-  scale_fill_manual(values = strategy_colours) +  
-  labs(title = "Ranked FNR", y = "FNR") + 
-  rank_theme() + ylim(0, 45)
-
-ranked_prauc <- ggplot(ranked_results, aes(x = strategy, y = pr_auc, fill = strategy)) + 
-  geom_bar(stat = "identity") + 
-  geom_text(aes(label = pr_auc_rank), vjust = -0.5) +
-  scale_fill_manual(values = strategy_colours) +  
-  labs(title = "Ranked PR-AUC", y = "PR-AUC") + 
-  rank_theme() + ylim(0, 49)
 
 
 #-------------------------------------------------------------------------------
@@ -338,29 +267,62 @@ ranked_prauc <- ggplot(ranked_results, aes(x = strategy, y = pr_auc, fill = stra
 # Bar plot for visualising metrics per dataset (10 bars (tools) x 5 plots (datasets) x 3 rows (metrics)) ----
 
 # Optional to read in results (if not in global environment)
-results <- read.csv(file = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/groundtruth_performance.csv")
+results <- read.csv(file = "./C_Test_Strategies/data/groundtruth_performance_metrics/groundtruth_performance.csv")
 
 
 # Convert the strategy column to a factor with the specified order
-results$strategy <- factor(results$strategy, levels = strategy_order)
+
+# Order according to set list (colour)
+#results$strategy <- factor(results$strategy, levels = methods)
+#results$dataset <- factor(results$dataset, levels = datasets)
+
+# Order according to numerical values 
+ordered_methods <- ranked_results$strategy[order(ranked_results$precision_rank)]
+results$strategy <- factor(results$strategy, levels = ordered_methods)
+results$dataset <- ifelse(results$dataset == "pro_apoptotic", "apoptotic_pro", results$dataset)
+
 
 # Pivot the data frame to long format
 df_long <- results %>%
-  pivot_longer(cols = c(precision, fnr, pr_auc), names_to = "measure", values_to = "value") %>%
+  pivot_longer(cols = c(precision, tpr, pr_auc), names_to = "measure", values_to = "value") %>%
   mutate(
     lower = case_when(
       measure == "precision" ~ precision_lower,
-      measure == "fnr" ~ fnr_lower,
+      measure == "tpr" ~ tpr_lower,
       measure == "pr_auc" ~ pr_auc_lower
     ),
     upper = case_when(
       measure == "precision" ~ precision_upper,
-      measure == "fnr" ~ fnr_upper,
+      measure == "tpr" ~ tpr_upper,
       measure == "pr_auc" ~ pr_auc_upper
     )
   ) %>%
-  select(-precision_lower, -fnr_lower, -pr_auc_lower, -precision_upper, -fnr_upper, -pr_auc_upper) %>%
+  select(-precision_lower, -tpr_lower, -pr_auc_lower, -precision_upper, -tpr_upper, -pr_auc_upper) %>%
   distinct()
+
+# Add inverse for stacked bar effect 
+df_long$inverse <- 1- df_long$value
+
+# Reshape & ensure performance is plotted first
+df_long_melted <- melt(df_long, id.vars = c("dataset", "strategy", "prevalence", "measure", "lower", "upper"), 
+                       measure.vars = c("value", "inverse"))
+
+# Ensure the variable column is a factor with the correct levels
+df_long_melted$variable <- factor(df_long_melted$variable, levels = c("inverse", "value"))
+
+
+# Create the stacked bar graph
+performance_plot <- ggplot(df_long_melted, aes(x = value, y = strategy, fill = variable)) +
+  geom_bar(stat = "identity", width = 0.55) +
+  facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
+  scale_fill_manual(values = c("value" = "#001E5C", "inverse" = "#E6E6E6")) +
+  theme_classic() + 
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        legend.position = "none",
+        strip.text = element_blank(), # Comment out to verify order 
+        strip.background = element_blank())
 
 
 # Define theme 
@@ -372,12 +334,12 @@ performance_bar_theme <- function() {
       legend.position = "none",
       legend.justification = "center",
       axis.text = element_text(size = 18),
-      axis.text.y = element_blank(),
+     # axis.text.y = element_blank(),
       axis.ticks.y = element_blank(),
       axis.title.y = element_blank(),
       axis.ticks.x = element_blank(),
       axis.line.y = element_line(color = "black"),
-      axis.line.x = element_blank(),
+      #axis.line.x = element_blank(),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
       panel.spacing = unit(1.5, "lines"),
@@ -397,22 +359,26 @@ precision_plot <- ggplot(df_long %>% dplyr::filter(measure == "precision"), aes(
   coord_flip() +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
-  scale_fill_manual(values = strategy_colours) +
+  #scale_fill_manual(values = strategy_colours) +
   scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
   labs(title = "", y = "") + 
   performance_bar_theme() + 
   theme(plot.title = element_text(hjust = -0.05),
         axis.title.x = element_blank(),
         axis.text.x = element_text(vjust = -1.5),
-        strip.text = element_blank(), 
+        strip.text = element_blank(), # Comment out to verify order 
         strip.background = element_blank())
 
-ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/precision.png",
+
+precision_plot
+
+ggsave(filename = "./C_Test_Strategies/img/precision.png",
        plot = precision_plot,
-       width = 17, height = 6.7, units = "in")
+       width = 22, height = 8.2, units = "in")
 
 # FNR plot
-fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy, y = value, fill = strategy)) +
+
+tpr_plot <- ggplot(df_long %>% dplyr::filter(measure == "tpr"), aes(x = strategy, y = value, fill = strategy)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
@@ -427,107 +393,61 @@ fnr_plot <- ggplot(df_long %>% dplyr::filter(measure == "fnr"), aes(x = strategy
         strip.text = element_blank(), 
         strip.background = element_blank())
 
-ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/false_negative_rate.png",
-       plot = fnr_plot,
-       width = 17, height = 6.7, units = "in")
+tpr_plot
 
-# PR-AUC plot
-pr_auc_plot <- ggplot(df_long %>% dplyr::filter(measure == "pr_auc"), aes(x = strategy, y = value, fill = strategy)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
-  facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
-  scale_fill_manual(values = strategy_colours) +
-  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
-  labs(title = "", y = "") + 
-  performance_bar_theme() + 
-  theme(plot.title = element_text(hjust = -0.05),
-        axis.title.x = element_blank(),
-        axis.text.x = element_text(vjust = -1.5),
-        strip.text = element_blank(), 
-        strip.background = element_blank())
+ggsave(filename = "./C_Test_Strategies/img/true_positive_rate.png",
+       plot = tpr_plot,
+       width = 22, height = 8.2, units = "in")
 
-ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/precision_recall_AUC.png",
-       plot = pr_auc_plot,
-       width = 17, height = 6.7, units = "in")
-
-#  PR-AUC curve plot ----
-
-create_pr_auc_plot <- function(dataset, data, strategy_colours) {
-  p <- ggplot(data %>% filter(dataset == dataset), aes(x = recall, y = precision, color = method)) +
-    geom_line(size = 1) +
-    scale_color_manual(values = strategy_colours) +
-    labs(title = paste("PR-AUC Curve for", dataset),
-         x = "Recall",
-         y = "Precision") +
-    theme_classic() +
-    theme(
-      legend.position = "right",
-      panel.background = element_rect(fill = "white", color = NA),
-      plot.background = element_rect(fill = "white", color = NA)
-    )
-  
-  return(p)
-}
-
-# Rename list items 
-datasets <- c("apoptotic", "proapoptotic", "GM18507_dead", "GM18507_dying", "PDX")
-
-# Initialize a new list to store combined dataframes for each dataset
+# PR-AUC plot ----- 
+# Before show PR-AUC values, find what the value would be for random guessing 
+datasets <- c("apoptotic", "pro_apoptotic", "GM18507_dead", "GM18507_dying", "PDX")
 combined_pr_auc_curves <- list()
 
 # Combine items of the same dataset together
 for (dataset in datasets) {
-  # Filter items that belong to the current dataset
   dataset_items <- pr_auc_curves[grep(paste0("^", dataset, "_"), names(pr_auc_curves))]
-  
-  # Combine the items into a single dataframe
   combined_pr_auc_curves[[dataset]] <- do.call(rbind, dataset_items)
 }
 
 # Find the positive prevalence for each dataset 
 positive_prevalence <- list()
-
 positive_prevalence$apoptotic <- table(apoptotic$orig.ident)[1] / (table(apoptotic$orig.ident)[1] + table(apoptotic$orig.ident)[2])
-positive_prevalence$proapoptotic <- table(pro_apoptotic$orig.ident)[2] / (table(pro_apoptotic$orig.ident)[1] + table(pro_apoptotic$orig.ident)[2])
+positive_prevalence$apoptotic_pro <- table(pro_apoptotic$orig.ident)[2] / (table(pro_apoptotic$orig.ident)[1] + table(pro_apoptotic$orig.ident)[2])
 positive_prevalence$GM18507_dead <- table(GM18507_dead$orig.ident)[2] / (table(GM18507_dead$orig.ident)[2] + table(GM18507_dead$orig.ident)[1])
 positive_prevalence$GM18507_dying <- table(GM18507_dying$orig.ident)[2] / (table(GM18507_dying$orig.ident)[2] + table(GM18507_dying$orig.ident)[1])
 positive_prevalence$PDX <- table(PDX$orig.ident)[2] / (table(PDX$orig.ident)[2] + table(PDX$orig.ident)[1])
 
+# Convert positive_prevalence to a dataframe for easier plotting
+positive_prevalence_df <- data.frame(
+  dataset = names(positive_prevalence),
+  prevalence = unlist(positive_prevalence)
+)
 
-# Plot the curves 
-plots <- list()
-for (dataset in names(combined_pr_auc_curves)) {
-  p <- ggplot(combined_pr_auc_curves[[dataset]], aes(x = recall, y = precision, color = method)) +
-    geom_line(size = 2) +
-    geom_hline(yintercept = positive_prevalence[[dataset]], linetype = "dashed", color = "black") +
-    scale_x_continuous(labels = scales::number_format(accuracy = 0.1)) +  
-    scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) +
-    scale_color_manual(values = strategy_colours) +
-    labs(title = "",
-         x = "Recall",
-         y = "Precision") +
-    theme_classic() +
-    theme(legend.position = "none",
-          axis.title = element_blank(),
-          axis.ticks = element_blank(),
-          axis.text.y = element_text(size = 16, hjust = -0.5),
-          axis.text.x = element_text(size = 16, vjust = -0.5),
-          panel.border = element_rect(fill = NA, color = "black"),
-          panel.background = element_rect(fill = "white", color = NA),
-          plot.background = element_rect(fill = "white", color = NA))
-  
-  plots[[dataset]] <- p
-}
 
-# Name the plots
-names(plots) <- names(combined_pr_auc_curves)
+# Bar plot like precision and FNR but for PR-auC with threshold line for random guessing 
+pr_auc_plot <- ggplot(df_long %>% dplyr::filter(measure == "pr_auc"), aes(x = strategy, y = value, fill = strategy)) +
+  geom_bar(stat = "identity") +
+  geom_hline(data = positive_prevalence_df, aes(yintercept = prevalence), linetype = "dashed", color = "black") +
+  coord_flip() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  facet_wrap(~ dataset, nrow = 1, strip.position = "bottom") +
+  scale_fill_manual(values = strategy_colours) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
+  labs(title = "", y = "") + 
+  performance_bar_theme() + 
+  theme(plot.title = element_text(hjust = -0.05),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(vjust = -1.5),
+        strip.text = element_blank(), 
+        strip.background = element_blank())
 
-PRAUC_plots <- plots$apoptotic | plots$GM18507_dead | plots$GM18507_dying | plots$PDX | plots$proapoptotic
+pr_auc_plot
 
-ggsave(filename = "/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/PRAUC_curves.png",
-       plot = PRAUC_plots,
-       width = 15, height = 5.3, units = "in")
+ggsave(filename = "./C_Test_Strategies/img/precision_recall_AUC.png",
+       plot = pr_auc_plot,
+       width = 22, height = 8.2, units = "in")
+
 
 #-------------------------------------------------------------------------------
 # COMBINE PLOTS 
@@ -539,11 +459,8 @@ final_plot <- (precision_plot + ranked_precision + plot_layout(widths = c(5, 1))
   (pr_auc_plot + ranked_prauc + plot_layout(widths = c(5, 1)))
 
 # Save the plot
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/barplots_ranked.png"), 
+ggsave(filename = file.path("./C_Test_Strategies/img/barplots_ranked.png"), 
        plot = final_plot , width = 25, height = 19, dpi = 300, limitsize = FALSE)
-
-ggsave(filename = file.path("/home/alicen/Projects/ReviewArticle/benchmark_results/performance_metrics/barplots_ranked.svg"), 
-       plot = final_plot, width = 20, height = 13, dpi = 300)
 
 
 
