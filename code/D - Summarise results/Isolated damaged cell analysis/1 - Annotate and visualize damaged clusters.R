@@ -185,7 +185,6 @@ dead_SA928_reduced$damaged_population <- ifelse(dead_SA928_reduced$seurat_cluste
 dying_SA928_reduced <- edit_objects(dying_SA928_isolated, "dying_SA928_isolated", method = "UMAP", reduce = FALSE, meta_data_edit = TRUE)
 dying_SA928_reduced$damaged_population <- ifelse(dying_SA928_reduced$seurat_clusters %in% c(2, 5), "A", "B")
 
-
 # PDX dead 
 dead_SA604_reduced  <- edit_objects(dead_SA604_isolated, "dead_SA604_isolated", method = "UMAP", reduce = FALSE, meta_data_edit = TRUE)
 dead_SA604_reduced$damaged_population <- ifelse(dead_SA604_reduced $seurat_clusters %in% c(0, 2, 5), "B", "A")
@@ -550,6 +549,7 @@ dead_SA604_tool_proportions <- find_damaged_population_detected(dead_SA604_reduc
 # Function to count the proportion of each population detected by the tools  ( population-specific detected cells / size of tool-specific detected cells )
 find_damaged_popoulation_proportion <- function(seurat, 
                                                 tool_output, 
+                                                dataset,
                                                 focus = FALSE,     # Whether to include other categories, or not and 'focus' on population A and B
                                                 special = FALSE    # Zenodo files are 'special' and require additional formatting for compatibility 
                                                 ) {
@@ -655,17 +655,45 @@ find_damaged_popoulation_proportion <- function(seurat,
     
   }
   
+  # Adjust rownames 
+  Population_A_title <- paste0("Population_A", "_", dataset)
+  detected_proportions[[Population_A_title]] <- detected_proportions$Population_A
+  detected_proportions[[Population_A_title]] <- ifelse(is.na(detected_proportions[[Population_A_title]]), 0, detected_proportions[[Population_A_title]])
+  detected_proportions[[Population_A_title]] <- detected_proportions[[Population_A_title]] / 100
+  detected_proportions <- detected_proportions[, -2]
+  detected_proportions <- detected_proportions[, -2]
   
+
   return(detected_proportions)
   
 }
 
 
-apoptotic_tool_proportions_alt <- find_damaged_popoulation_proportion(seurat = apoptotic_reduced, tool_output = apoptotic_tool_output)
-pro_apoptotic_tool_proportions_alt <- find_damaged_popoulation_proportion(pro_apoptotic_reduced, pro_apoptotic_tool_output)
-dead_SA928_tool_proportions_alt <- find_damaged_popoulation_proportion(dead_SA928_reduced, GM18507_dead_tool_output, special = TRUE)
-dying_SA928_tool_proportions_alt <- find_damaged_popoulation_proportion(dying_SA928_reduced, GM18507_dying_tool_output, special = TRUE)
-dead_SA604_tool_proportions_alt <- find_damaged_popoulation_proportion(dead_SA604_reduced, PDX_tool_output, special = TRUE)
+apoptotic_tool_proportions_alt <- find_damaged_popoulation_proportion(seurat = apoptotic_reduced, dataset = "apoptotic", tool_output = apoptotic_tool_output)
+pro_apoptotic_tool_proportions_alt <- find_damaged_popoulation_proportion(pro_apoptotic_reduced, dataset = "pro_apoptotic", pro_apoptotic_tool_output)
+dead_SA928_tool_proportions_alt <- find_damaged_popoulation_proportion(dead_SA928_reduced, dataset = "dead_SA928", GM18507_dead_tool_output, special = TRUE)
+dying_SA928_tool_proportions_alt <- find_damaged_popoulation_proportion(dying_SA928_reduced, dataset = "dying_SA928", GM18507_dying_tool_output, special = TRUE)
+dead_SA604_tool_proportions_alt <- find_damaged_popoulation_proportion(dead_SA604_reduced, dataset = "dead_SA604", PDX_tool_output, special = TRUE)
+
+# Combine results
+proportions <- merge(apoptotic_tool_proportions_alt, pro_apoptotic_tool_proportions_alt, by = "Method")
+proportions <- merge(proportions, dead_SA928_tool_proportions_alt, by = "Method")
+proportions <- merge(proportions, dying_SA928_tool_proportions_alt, by = "Method")
+proportions <- merge(proportions, dead_SA604_tool_proportions_alt, by = "Method")
+
+# Find the median across datasets 
+
+columns_to_median <- colnames(proportions)
+columns_to_median <- columns_to_median[columns_to_median != "Method"]
+proportions$Population_A <- apply(proportions[, columns_to_median], 1, median, na.rm = TRUE)
+proportions$Population_B <- 1 - proportions$Population_A
+
+write.csv(proportions, 
+          file = "./D_Summarise_Results /data/damaged_population.csv",
+          quote = FALSE, 
+          row.names = FALSE
+)
+
 
 #-------------------------------------------------------------------------------
 # PLOT
