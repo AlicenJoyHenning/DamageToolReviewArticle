@@ -54,7 +54,7 @@ performance_rankings$Final_Rank <- 48 - performance_rankings$Final_Rank
 
 
 #-------------------------------------------------------------------------------
-# PROPORTIONs
+# STRINGENCY / DAMAGED PROPORTIONS
 #-------------------------------------------------------------------------------
 
 # Proportions -----
@@ -62,7 +62,14 @@ performance_rankings$Final_Rank <- 48 - performance_rankings$Final_Rank
 proportions <- read.csv("./D_Summarise_Results /data/proportion_damaged.csv")
 proportions$Inverse <- 100 - proportions$proportion
 
+#-------------------------------------------------------------------------------
+# DAMAGED POPULATION PROPORTION 
+#-------------------------------------------------------------------------------
 
+# Damaged population -----
+damaged_population <- read.csv("./D_Summarise_Results /data/damaged_population.csv")
+damaged_population <- damaged_population[, c("Method", "Population_A", "Population_B")]
+damaged_population$strategy <- damaged_population$Method
 
 #-------------------------------------------------------------------------------
 # Consistency 
@@ -109,6 +116,8 @@ Final_Ranks$Final_Rank <- NULL
 Final_Ranks$Consistency <- consistecy_rankings[, c("Final_Rank")]
 Final_Ranks$Usability <- usability_rankings[, c("Final_Rank")]
 Final_Ranks$Proportion <- proportions[, c("proportion")]
+Final_Ranks$Damaged <- damaged_population$Population_A
+Final_Ranks$Damaged_inverse <- damaged_population$Population_B
 View(Final_Ranks)
 
 
@@ -171,6 +180,25 @@ ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/proportion_
        plot = proportion_plot, width = 7, height = 12, dpi = 300)
 
 
+# Reshape & ensure performance is plotted first
+data_long <- reshape2::melt(Final_Ranks, id.vars = "method", measure.vars = c("Damaged", "Damaged_inverse"))
+data_long$variable <- factor(data_long$variable, levels = c("Damaged_inverse", "Damaged"))
+
+
+damaged_plot <- ggplot(data_long, aes(x = value, y = method, fill = variable)) +
+  geom_bar(stat = "identity", width = 0.55) +
+  scale_fill_manual(values = c("Damaged" = "#8E99B1", "Damaged_inverse" = "#E6E6E6")) +
+  theme_classic() + 
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        axis.line = element_blank(),
+        legend.position = "none"
+  )
+
+ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/damaged_population_plot.png"), 
+       plot = damaged_plot, width = 7, height = 12, dpi = 300)
+
 
 
 # Consistency 
@@ -220,10 +248,21 @@ ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/usability_p
 # Remove labels for arranging
 consistency_plot <- consistency_plot + theme(axis.text = element_blank())
 usability_plot <- usability_plot + theme(axis.text = element_blank())
-combined_ranking <- performance_plot |  proportion_plot |consistency_plot | usability_plot
+combined_ranking <- performance_plot |  damaged_plot | proportion_plot | consistency_plot | usability_plot
 combined_ranking
 ggsave(filename = file.path("./D_Summarise_Results /img/Tool_results/combined_tool_rankings_plot.png"), 
-       plot = combined_ranking, width = 18, height = 14, dpi = 300)
+       plot = combined_ranking, width = 22, height = 14, dpi = 300)
 
 
 ### End 
+
+
+
+
+
+
+
+
+
+
+
