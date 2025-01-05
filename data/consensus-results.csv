@@ -1,10 +1,10 @@
 Strategy;Platform;Metric;Outlier detection;Performance;Damage focus;Stringency;Consistency;Usability
 Manual (adaptive mito.);-;Mitochondrial percent expression;Percentile;6;8;4;8;6
-Manual (mito., ribo.);-;Mitochondrial, ribosomal percent expression;Percentile;6;8;6;8;6
+Manual (mito., ribo.);-;Mitochondrial percent expression, ribosomal percent expression;Percentile;6;8;6;8;6
 Scater;R;Mitochondrial percent, library size;PCA;8;6;6;6;6
 miQC;R;Mitochondrial percent, library size;Mixture modelling;8;6;6;6;4
-Manual (MALAT1, mito., ribo.);-;MALAT1, mitochondrial percent, ribosomal percent;Percentile;6;8;6;8;6
-Manual (mito., ribo., library);-;Mitochondrial percent, ribosomal percent, library size;Percentile;6;8;6;8;6
+Manual (MALAT1, mito., ribo.);-;MALAT1 percent expression, mitochondrial percent expression, ribosomal percent expression;Percentile;6;8;6;8;6
+Manual (mito., ribo., library);-;Mitochondrial percent expression, ribosomal percent expression, library size;Percentile;6;8;6;8;6
 valiDrops;R;Mitochondrial percent, library size;Machine learning;8;6;6;6;4
 Manual (MALAT1);-;MALAT1 percent expression;Percentile;6;8;4;8;6
 Manual (fixed mito.);-;Mitochondrial percent;Percentile;6;6;4;6;4
@@ -13,4 +13,5 @@ DropletQC;R;Nuclear fraction, library size;Expectation-maximization;8;6;6;6;4
 SampleQC;R;Mitochondrial percent, library size;Mixture modelling;8;6;6;6;4
 ddqc;R, Python;Mitochondrial percent, library size;MAD;8;6;6;6;4
 EnsembleKQC;Python;Mitochondrial percent, library size, housekeeping genes;MAD;8;6;6;6;4
+
 
