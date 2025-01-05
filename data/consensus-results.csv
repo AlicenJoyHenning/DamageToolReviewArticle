@@ -1,6 +1,6 @@
 Strategy;Platform;Metric;Outlier detection;Performance;Damage focus;Stringency;Consistency;Usability
 Manual (adaptive mito.);-;Mitochondrial percent expression;Percentile;6;8;4;8;6
-Manual (mito., ribo.);-;Mitochondrial and ribosomal percent expression;Percentile;6;8;6;8;6
+Manual (mito., ribo.);-;Mitochondrial, ribosomal percent expression;Percentile;6;8;6;8;6
 Scater;R;Mitochondrial percent, library size;PCA;8;6;6;6;6
 miQC;R;Mitochondrial percent, library size;Mixture modelling;8;6;6;6;4
 Manual (MALAT1, mito., ribo.);-;MALAT1, mitochondrial percent, ribosomal percent;Percentile;6;8;6;8;6
