@@ -1,1 +1,15 @@
-Strategy, Platform, Metric, Outlier detection, Performance, Damage focus, Stringency, Consistency, Usability
+Strategy; Platform; Metric; Outlier detection; Performance; Damage focus; Stringency; Consistency; Usability
+ddqc; R, Python; ; MAD; 10; 10; 10; 10; 10 
+DropletQC; R; Unique transcripts, nuclear fraction; ; 10; 10; 10; 10; 10 
+ensembleKQC; Python; ; MAD; 10; 10; 10; 10; 10 
+miQC; R; Unique transcripts, mitochondrial percent; Linear modelling; 10; 10; 10; 10; 10 
+SampleQC; R; Unique transcripts, mitochondrial percent; MAD; 10; 10; 10; 10; 10 
+scater R; Unique transcripts, mitochondrial percent; PCA; 10; 10; 10; 10; 10 
+valiDrops; R; Unique transcripts, mitochondrial percent; intense; 10; 10; 10; 10; 10 
+manual_fixed_mito; R; mitochondrial percent; None; 10; 10; 10; 10; 10 
+manual_adaptive_mito; R; mitochondrial percent expression; Percentile; 10; 10; 10; 10; 10 
+manual_mito_ribo: R; mitochondrial percent expression, ribosomal percent expression; Percentile; 10; 10; 10; 10; 10 
+manual_mito_ribo_library; R; Unique transcripts, mitochondrial percent expression, ribosomal percent expression; Percentile; 10; 10; 10; 10; 10 
+manual_library;  R; Unique transcripts; Percentile; 10; 10; 10; 10; 10 
+manual_malat1;  R; MALAT1 percent expression; Percentile; 10; 10; 10; 10; 10 
+manual_malat1_mito_ribo; R; MALAT1 percent expression, mitochondrial percent expression; Percentile; 10; 10; 10; 10; 10 
