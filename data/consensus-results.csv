@@ -1,18 +1,18 @@
-Strategy;Platform;Metric;Outlier detection;Performance;Damage focus;Stringency;Consistency;Usability
-Manual (adaptive mito.);-;mito. percent;Percentile;6;8;4;8;6
-Manual (mito., ribo.);-;mito. percent,ribo. percent;Percentile;6;8;6;8;6
-Scater;R;mito. percent,library size;PCA;8;6;6;6;6
-miQC;R;mito. percent,library size;Mixture modelling;8;6;6;6;4
-Manual (MALAT1, mito., ribo.);-;MALAT1 percent,mito. percent,ribo. percent;Percentile;6;8;6;8;6
-Manual (mito., ribo., library);-;mito. percent,ribo. percent,library size;Percentile;6;8;6;8;6
-valiDrops;R;mito. percent,library size;Machine learning;8;6;6;6;4
-Manual (MALAT1);-;MALAT1 percent;Percentile;6;8;4;8;6
-Manual (fixed mito.);-;mito. percent;Percentile;6;6;4;6;4
-Manual (library);-;library size;Percentile;6;6;4;6;4
-DropletQC;R;nuclear fraction,library size;Expectation-maximization;8;6;6;6;4
-SampleQC;R;mito. percent,library size;Mixture modelling;8;6;6;6;4
-ddqc;R, Python;mito. percent,library size;MAD;8;6;6;6;4
-EnsembleKQC;Python;mito. percent,library size,housekeeping genes;MAD;8;6;6;6;4
+Strategy;Platform;Metric;Outlier detection;Performance;Stringency;Damage.focus;Consistency;Usability
+Manual (adaptive mito.);-;mito. percent;Percentile;37;6.11764705882353;0.9658703;0.540608619;0
+Manual (mito., ribo.);-;mito. percent,ribo. percent;Percentile;32;3.41321600029701;0.9840637;0.593173305;0
+Scater;R;mito. percent,library size;PCA;30;4.82720229135083;0.5000000;0.798238189;13.000000
+miQC;R;mito. percent,library size;Mixture modelling;30;18.8716230366122;0.9552352;0.31344998;9.906250
+Manual (MALAT1, mito., ribo.);-;MALAT1 percent,mito. percent,ribo. percent;Percentile;26;0.694055748348819;0.9565217;0.751814369;0
+Manual (mito., ribo., library);-;mito. percent,ribo. percent,library size;Percentile;24;1.03898410443122;1.0000000;0.736055264;0
+valiDrops;R;mito. percent,library size;Machine learning;22;1.64496230294722;1.0000000;0.839062724;8.250000
+Manual (MALAT1);-;MALAT1 percent;Percentile;19;4.02612096886769;0.9027778;0.781523179;0
+Manual (fixed mito.);-;mito. percent;Percentile;14;24.9883113960682;0.8927203;0.513660614;0
+Manual (library);-;library size;Percentile;10;10.1072607260726;0.7337006;0.350712309;0
+DropletQC;R;nuclear fraction,library size;Expectation-maximization;7;0;0.0000000;0.779448587;8.578125
+SampleQC;R;mito. percent,library size;Mixture modelling;4;11.377371427768;0.5725191;0.636263384;10.812500
+ddqc;R, Python;mito. percent,library size;MAD;4;14.307948862792;0.5354331;0.731293055;9.171875
+EnsembleKQC;Python;mito. percent,library size,housekeeping genes;MAD;0;30.6019730219448;0.5743146;0.72318676;1.000000
 
 
 
