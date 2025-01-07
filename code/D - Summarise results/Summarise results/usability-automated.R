@@ -50,4 +50,4 @@ repositories <- repositories %>%
   select(method, Stars)
 
 # Write to CSV
-write.csv(repositories, "data/D_Summary_Results/usability-flexible.csv", row.names = FALSE)
+write.csv(repositories, "./data/D_Summary_Results/usability-flexible.csv", row.names = FALSE)
