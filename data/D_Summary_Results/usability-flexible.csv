@@ -1,0 +1,15 @@
+method,Stars,GitHub_Upload,Last_Push,GitHub_update,Stars_score
+ddqc,15,1,2023-05-22,1,0.789473684210526
+DropletQC,34,1,2021-11-18,0,1.78947368421053
+ensembleKQC,0,1,2019-10-31,0,0
+miQC,19,1,2023-01-04,0,1
+SampleQC,36,1,2022-11-14,0,1.89473684210526
+scater,95,1,2024-07-18,1,5
+valiDrops,16,1,2024-10-25,1,0.842105263157895
+manual_fixed_mito,0,0,0,0,0
+manual_adaptive_mito,0,0,0,0,0
+manual_mito_ribo,0,0,0,0,0
+manual_mito_ribo_library,0,0,0,0,0
+manual_library,0,0,0,0,0
+manual_malat1,0,0,0,0,0
+manual_malat1_mito_ribo,0,0,0,0,0
