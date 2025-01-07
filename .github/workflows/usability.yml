@@ -1,0 +1,35 @@
+name: Update GitHub Stars CSV
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Runs daily at midnight UTC
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  update-stars:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Install R dependencies
+        run: |
+          Rscript -e 'if (!requireNamespace("httr")) install.packages("httr")'
+          Rscript -e 'if (!requireNamespace("tidyverse")) install.packages("tidyverse")'
+
+      - name: Run R script to update stars
+        run: Rscript update_stars.R
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add github_stars.csv
+          git commit -m "Updated GitHub stars CSV"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
