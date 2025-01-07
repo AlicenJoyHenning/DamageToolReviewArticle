@@ -1,5 +1,3 @@
-name: Update GitHub Stars CSV
-
 on:
   schedule:
     - cron: "0 0 * * *" # Runs daily at midnight UTC
@@ -22,7 +20,7 @@ jobs:
           Rscript -e 'if (!requireNamespace("tidyverse")) install.packages("tidyverse")'
 
       - name: Run R script to update stars
-        run: Rscript update_stars.R
+        run: Rscript code/D - Summarise results/Summarise results/usability-automated.R
 
       - name: Commit and push changes
         run: |
