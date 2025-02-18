@@ -31,7 +31,7 @@
 
 # Load all packages 
 packages <- c("scDesign2", "copula", "plyr", "reshape2", "gridExtra", 
-              "Seurat", "SeuratData", "ggpubr", "cowplot", "ggplot2")
+              "Seurat", "SeuratData", "ggpubr", "cowplot", "ggplot2", "scRNAseq")
 
 for (pkg in packages) {
   if (!require(pkg, character.only = TRUE)) {
@@ -43,58 +43,107 @@ for (pkg in packages) {
 #-------------------------------------------------------------------------------
 # Retrieve & prepare reference data
 #-------------------------------------------------------------------------------
-set.seed(7)
 
-# SeuratData publicly available data ----
-available_data <- AvailableData()
-available_data <- subset(available_data, species == "human")
+# scRNAseq package prvoides publicly available data ----
+set.seed(7) # random down sampling of cells 
 
-# IFNB-Stimulated & Control PBMCs
-InstallData("ifnb")
-data("ifnb")
-ifnb <- UpdateSeuratObject(ifnb)
+# PBMC from studying looking at vaccine responsiveness in lupus patients where
+# two groups exist, those who with high & low antibody responses. 
 
-# Recollect celltypes  (don't need fine annotations, only coarse)
-ifnb$celltypes <- "na"
-ifnb$celltypes <- ifelse(ifnb$seurat_annotations %in% c("CD14 Mono",  "CD16 Mono"), "Monocyte", ifnb$celltypes)
-ifnb$celltypes <- ifelse(ifnb$seurat_annotations %in% c("CD4 Memory T", "T activated" , "CD4 Naive T", "CD8 T"), "T", ifnb$celltypes)
-ifnb$celltypes <- ifelse(ifnb$seurat_annotations %in% c("B Activated" , "B"), "B", ifnb$celltypes)
-ifnb$celltypes <- ifelse(ifnb$seurat_annotations %in% c("pDC","DC"), "DC", ifnb$celltypes)
-ifnb$celltypes <- ifelse(ifnb$seurat_annotations == "NK", "NK", ifnb$celltypes)
+# Retrieve data from the scRNAseq package 
+pbmc <- fetchDataset("kotliarov-pbmc-2020", "2024-04-18")
+metadata <- colData(pbmc)
+metadata$phenotype_sample <- paste0(metadata$adjmfc.time, "_", metadata$sample)
+counts <- pbmc@assays@data$counts
+rownames(counts) <- rownames(pbmc)
+colnames(counts) <- colnames(pbmc)
+counts  <- as(counts, "sparseMatrix")
 
+# Divide into samples according to response (one individual selected per response)
 
-# Isolate stimulated and control cells (used to simulate datasets in isolation- mimic reality)
-control <- subset(ifnb, stim == "CTRL")    # 6548 cells 
-stimulated <- subset(ifnb, stim == "STIM") # 7451 cells 
+# HIGH RESPONDERS 
+high_sample <- subset(metadata, phenotype_sample == "d0 high_207_d0")
+high_sample <- rownames(high_sample)
+high_counts  <- counts[, high_sample]
 
+# Seeing that they were not included, annotate the cell types 
+pbmc_high_seurat <- CreateSeuratObject(high_counts, assay = "RNA")
+pbmc_high_seurat <- NormalizeData(pbmc_high_seurat) %>%
+  FindVariableFeatures() %>%
+  ScaleData() %>%
+  RunPCA() %>%
+  FindNeighbors(dims = 1:30) %>%
+  FindClusters() %>%
+  RunUMAP(dims = 1:30)
 
-saveRDS(control, "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/control_reference.rds")
-saveRDS(stimulated, "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/stimulated_reference.rds")
+# clusters <- DimPlot(pbmc_high_seurat)
+# markers <- DotPlot(pbmc_high_seurat, features = c("MS4A1", "CD3E", "NKG7", "CD14", "ITGAX", "CLEC4C"))
+# clusters | markers # View output
 
-# Randomly down sample data for manageable model estimating times 
-control_selections <- sample(rownames(control@meta.data), 2000)
-control_subset <- subset(control, cells = control_selections)
-stimulated_selections <- sample(rownames(stimulated@meta.data), 2000)
-stimulated_subset <- subset(stimulated, cells = stimulated_selections)
-
-
-# Extract counts 
-control_matrix <-   as.matrix(control_subset@assays$RNA@counts)
-stimulated_matrix <-   as.matrix(stimulated_subset@assays$RNA@counts)
+pbmc_high_seurat$celltypes <- ifelse(pbmc_high_seurat$seurat_clusters %in% c(0, 1, 4, 5), "T", "-")
+pbmc_high_seurat$celltypes <- ifelse(pbmc_high_seurat$seurat_clusters == 2, "NK", pbmc_high_seurat$celltypes)
+pbmc_high_seurat$celltypes <- ifelse(pbmc_high_seurat$seurat_clusters == 3, "Monocyte", pbmc_high_seurat$celltypes)
+pbmc_high_seurat$celltypes <- ifelse(pbmc_high_seurat$seurat_clusters == 6, "B", pbmc_high_seurat$celltypes)
+pbmc_high_seurat$celltypes <- ifelse(pbmc_high_seurat$seurat_clusters %in% c(8, 9), "DC", pbmc_high_seurat$celltypes)
+pbmc_high_seurat$celltypes <- ifelse(pbmc_high_seurat$seurat_clusters == 10, "pDC", pbmc_high_seurat$celltypes)
 
 # Extract celltypes 
-celltypes <- as.data.frame(ifnb@meta.data[, c("celltypes")]) # name column annotations
-celltypes$cells <- rownames(ifnb@meta.data)
+celltypes <- as.data.frame(pbmc_high_seurat@meta.data[, c("celltypes")]) # name column annotations
+celltypes$cells <- rownames(pbmc_high_seurat@meta.data)
 colnames(celltypes)[1] <- "celltype"
 
-
-# Replace the colnames of the matrices with the corresponding cell types
+# Replace the colnames of the matrix with the corresponding cell types
 celltype_map <- setNames(celltypes$celltype, celltypes$cells)
-colnames(control_matrix) <- celltype_map[colnames(control_matrix)]
-colnames(stimulated_matrix) <- celltype_map[colnames(stimulated_matrix)]
+colnames(high_counts) <- celltype_map[colnames(high_counts)]
 
-saveRDS(control_matrix, "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/control_reference_matrix.rds")
-saveRDS(stimulated_matrix, "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/stimulated_reference_matrix.rds")
+
+# LOW RESPONDERS 
+low_sample <- subset(metadata, phenotype_sample == "d0 low_277_d0")
+low_sample <- rownames(low_sample)
+low_counts  <- counts[, low_sample]
+
+# Again, seeing that they were not included, annotate the cell types 
+pbmc_low_seurat <- CreateSeuratObject(low_counts, assay = "RNA")
+pbmc_low_seurat <- NormalizeData(pbmc_low_seurat) %>%
+  FindVariableFeatures() %>%
+  ScaleData() %>%
+  RunPCA() %>%
+  FindNeighbors(dims = 1:30) %>%
+  FindClusters() %>%
+  RunUMAP(dims = 1:30)
+
+# clusters <- DimPlot(pbmc_low_seurat)
+# markers <- DotPlot(pbmc_low_seurat, features = c("MS4A1", "CD3E", "NKG7", "CD14", "ITGAX", "CLEC4C"))
+# clusters | markers # View output
+
+pbmc_low_seurat$celltypes <- ifelse(pbmc_low_seurat$seurat_clusters %in% c(0, 2, 5), "T", "-")
+pbmc_low_seurat$celltypes <- ifelse(pbmc_low_seurat$seurat_clusters == 8, "NK", pbmc_low_seurat$celltypes)
+pbmc_low_seurat$celltypes <- ifelse(pbmc_low_seurat$seurat_clusters == 1, "Monocyte", pbmc_low_seurat$celltypes)
+pbmc_low_seurat$celltypes <- ifelse(pbmc_low_seurat$seurat_clusters %in% c(4, 6), "B", pbmc_low_seurat$celltypes)
+pbmc_low_seurat$celltypes <- ifelse(pbmc_low_seurat$seurat_clusters %in% c(7, 9), "DC", pbmc_low_seurat$celltypes)
+# pbmc_low_seurat$celltypes <- ifelse(pbmc_low_seurat$seurat_clusters == 6, "pDC", pbmc_low_seurat$celltypes) # too few 
+
+# Extract celltypes 
+celltypes <- as.data.frame(pbmc_low_seurat@meta.data[, c("celltypes")]) # name column annotations
+celltypes$cells <- rownames(pbmc_low_seurat@meta.data)
+colnames(celltypes)[1] <- "celltype"
+
+# Replace the colnames of the matrix with the corresponding cell types
+celltype_map <- setNames(celltypes$celltype, celltypes$cells)
+colnames(low_counts) <- celltype_map[colnames(low_counts)]
+
+
+# Randomly down sample data for manageable model estimating times 
+low_selections <- sample(colnames(low_counts), 2000)
+low_responders_subset <- low_counts[, low_selections] # 32738 features 2000 cells 
+high_selections <- sample(colnames(high_counts), 2000)
+high_responders_subset <- high_counts[, high_selections] # 32738  features 2000 cells 
+
+
+saveRDS(pbmc_low_seurat, "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/PBMC_low_seurat.rds")
+saveRDS(pbmc_high_seurat, "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/PBMC_high_seurat.rds")
+saveRDS(low_responders_subset, "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/PBMC_low_reference_matrix.rds")
+saveRDS(high_responders_subset, "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/PBMC_high_reference_matrix.rds")
 
 
 #-------------------------------------------------------------------------------
@@ -109,29 +158,29 @@ saveRDS(stimulated_matrix, "/home/alicen/Projects/ReviewArticle/damage_perturbat
 cell_type_selection <- c("Monocyte", "DC", "T", "B", "NK")  
 
 
-# Creating model with parameters
-message("Control modelling...")
+# Creating model with parameters for the high responders 
+message("High responder modelling...")
 
-control_model <- fit_model_scDesign2(data = control_matrix, 
-                                     cell_type_sel = cell_type_selection,
-                                     sim_method = 'copula', 
-                                     ncores = length(cell_type_selection)
+pbmc_high_model <- fit_model_scDesign2(data = high_responders_subset, 
+                                       cell_type_sel = cell_type_selection,
+                                       sim_method = 'copula', 
+                                       ncores = length(cell_type_selection)
 )
 
-message("Saving control model...")
-saveRDS(control_model, "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/control_model.rds")
+message("Saving model...")
+saveRDS(pbmc_high_model, "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/PBMC_high_model.rds")
 
-# Stimulated model 
-message("Stimulated modelling...")
 
-stimulated_model <- fit_model_scDesign2(data = stimulated_matrix, 
-                                     cell_type_sel = cell_type_selection,
-                                     sim_method = 'copula', 
-                                     ncores = length(cell_type_selection)
+# Creating model with parameters for the low responders
+message("Low responder modelling...")
+
+pbmc_low_model <- fit_model_scDesign2(data = low_responders_subset, 
+                                      cell_type_sel = cell_type_selection,
+                                      sim_method = 'copula', 
+                                      ncores = length(cell_type_selection)
 )
 
-message("Saving stimulated model...")
-saveRDS(stimulated_model, "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/stimulated_model.rds")
-
+message("Saving model...")
+saveRDS(pbmc_low_model, "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/PBMC_low_model.rds")
 
 ### End
