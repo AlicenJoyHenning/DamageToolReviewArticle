@@ -11,7 +11,8 @@
 # This script contains the code to create the model for generating simulated data using scDesign 2, 
 # a scRNA-seq simulator that preserves gene names (required for all strategies) : 
 # 1. Obtain annotated reference dataset 
-#   -  SeuratData: IFNB containing treated (IFN-STIMULATED) and control (IFN-CONTROL) cells
+#   -  scRNAseq: PBMC samples from individuals with extensive response to influenza vaccine (HIGH) and 
+#      a moderate to non-existent response (LOW) 
 # 2. Prepare the dataset for modelling 
 # 3. Run the modelling scDesign2 function and save the models 
 # 
