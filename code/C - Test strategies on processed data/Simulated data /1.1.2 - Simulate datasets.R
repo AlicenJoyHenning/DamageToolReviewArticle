@@ -37,104 +37,116 @@ for (pkg in packages) {
   }
 }
 
-
 #-------------------------------------------------------------------------------
 # Retrieve reference data (again)
 #-------------------------------------------------------------------------------
 
-# IFNB SeuratData reference samples 
-control <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_reference.rds")
-stimulated <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_reference.rds")
-control_matrix <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_reference_matrix.rds")
-stimulated_matrix <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_reference_matrix.rds")
+# Sample sheet (guide)
+sample_sheet <- read.csv("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/unperturbed_data/sample_sheet.csv")
+sample_sheet$Origin_Condition <- paste0(sample_sheet$Origin, sample_sheet$Condition)
+sample_sheet$Name <- paste0(sample_sheet$Origin_Condition, "_R", sample_sheet$Replicate, "_SD", sample_sheet$Sequencing_depth, "_CT", sample_sheet$Celltype_number, "_CN", sample_sheet$Cell_number)
+sample_sheet$Plot <- ifelse()
 
-# Read in models (1.1.1 - Fit scDesign2 models.R)
-control_model <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/control_model.rds")
-stimulated_model <- readRDS("/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2/simulated_references/stimulated_model.rds")
+# Core scRNAseq references
+high_pbmc <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_high_seurat.rds")
+high_pbmc_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_high_reference_matrix.rds")
+low_pbmc <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_low_seurat.rds")
+low_pbmc_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_low_reference_matrix.rds")
+covid <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_covid_seurat.rds")
+covid_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_covid_reference_matrix.rds")
+healthy <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_healthy_seurat.rds")
+healthy_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_healthy_reference_matrix.rds")
 
 
-# Human gene annotations 
-
-# Connect to AnnotationHub (ah) and get the query search for the organisms of interest
-ah <- AnnotationHub() 
-Hsap_ahDb <- query(ah, pattern = c("Homo sapien", "EnsDb"), ignore.case = TRUE) 
-
-# # Extract gene-level information from database of most up-to-date version
-Hsap_versions <- mcols(Hsap_ahDb) 
-Hsap_latest_version <- tail(rownames(Hsap_versions), n = 1)
-Hsap_edb <- ah[[Hsap_latest_version]]
-annotations <- genes(Hsap_edb, return.type = "data.frame") 
-
+# Read in models (Fit scDesign2 models.R)
+low_pbmc_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_low_model.rds")
+high_pbmc_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_high_model.rds")
+covid_cellline_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/cellline_covid_model.rds")
+healthy_cellline_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/cellline_healthy_model.rds")
 
 
 #-------------------------------------------------------------------------------
 # Run scDesign2
 #-------------------------------------------------------------------------------
 
-# Define inputs for scDesign2 ----
-
-# Cell types to include 
-cell_type_selection <- c("Monocyte", "DC", "T", "B", "NK")   # coarse PBMC annotations from reference dataset 
-
-# Proportion which these celltype exist 
-cell_type_proportion_control <- table(colnames(control_matrix))[cell_type_selection]
-cell_type_proportion_stimulated <- table(colnames(stimulated_matrix))[cell_type_selection]
-
 
 # Simulate datasets using scDesign2----
 
-generate_simulations <- function(model_params,    # model fit created using scDesign2 fitting function 
-                                 cell_type_prop,  # instead of mutinomial proportions, mimic proportions from the original data 
-                                 project_name, 
-                                 replicates = 3, 
-                                 output_dir = "/home/alicen/Projects/ReviewArticle/damage_perturbation/scDesign2") {
+simulate_matrices <- function(
+    origin, # "PH" "PL" "CH" "CC"
+    replicate, # 1 2 3 
+    target_sequencing_depth, # 200, 500, 1000, 2000, 5000
+    target_celltypes,  # 1, 2, 3, 6
+    target_cellnumber, # 200, 500, 1000, 2000, 5000
+){
+  # Define inputs for scDesign
   
-  # Helper function to generate and save a simulation dataset
-  generate_and_save_simulation <- function(sim_number) {
-    
-    # Enforce (charisma) uniqueness (nerve and talent)
-    set.seed(Sys.time() + sim_number)
-    
-    # Randomize cell number of simulation within reasonable range (4000 to 6000 cells)
-    target_cells <- as.integer(runif(1, min = 4000, max = 6000))
-    
+  # Dataset of origin related to counts & model
+  if (origin == "PH"){
+    count_matrix <- high_pbmc_matrix
+    model <- high_pbmc_model
+  }
+  
+  if (origin == "PL"){
+    count_matrix <- low_pbmc_matrix
+    model <- low_pbmc_model
+  }
+  
+  if (origin == "CC"){
+    count_matrix <- covid_matrix
+    model <- covid_cellline_model
+  }
+  
+  if (origin == "CH"){
+    count_matrix <- healthy_matrix
+    model <- healthy_cellline_model
+  }
+  
+  
+  # Cell type selection 
+  Cell_Type_6 <- c("B", "DC", "Monocyte", "NK", "T", "pDC") 
+  Cell_Type_3 <- c("B", "Monocyte", "T") 
+  Cell_Type_2 <- c("CD8", "CD4") 
+  Cell_Type_1 <- c("CD4") 
+  
+  
+  
+  # Proportion which these cell types exist 
+  cell_type_proportion <- table(colnames(high_pbmc_matrix))[cell_type_selection]
+  
+  
+}
+
+
+
+
     # scDesign2 to create count matrices 
     sim_matrix <- simulate_count_scDesign2(model_params = model_params, 
+                                           n_cell_old = 3000, # true for all 
                                            n_cell_new = target_cells, 
+                                           total_count_new = target_library_size, 
                                            sim_method = 'copula',
-                                           cell_type_prop = cell_type_prop)
-    
-    # Easier recording purposes 
-    print(dim(sim_matrix))
+                                           cell_type_prop = cell_type_proportion)
+  
     
     # Create matrix.csv and Seurat objects (rds) for downstream tool testing 
     # Store current colnames 
     celltypes <- colnames(sim_matrix)
     
-    # Transfer gene names 
-    if (project_name == "control"){
-      
-      # Gene names
-      rownames(sim_matrix) <- rownames(control@assays$RNA@counts)
-      
-      # Extract cell barcodes from Seurat object
-      cell_barcodes <- rownames(control@meta.data)
-      
-    } else {
-      
-      # Gene names 
-      rownames(sim_matrix) <- rownames(stimulated@assays$RNA@counts)
-      
-      # Extract cell barcodes from Seurat object
-      cell_barcodes <- rownames(stimulated@meta.data)
-      
-    } 
+    # Ensure clean cell barcodes
+    colnames(count_matrix) <- names(colnames(count_matrix))
+    
+    # Transfer gene names & extract cell barcodes 
+    rownames(sim_matrix) <- rownames(input_matrix)
     
     # Transfer barcodes to matrix and save
-    colnames(sim_matrix) <- cell_barcodes[1:ncol(sim_matrix)]
+    colnames(sim_matrix) <- sample(cell_barcodes, ncol(sim_matrix))
     write.csv(sim_matrix, file.path(output_dir, paste0(project_name, "_sim_", sim_number, "_matrix.csv")))
     
     # Create Seurat object
+    #new_matrix <- as.matrix(sim_matrix)
+    #rownames(new_matrix) <- make.unique(rownames(sim_matrix))
+    #colnames(new_matrix) <- make.unique(colnames(sim_matrix))
     seurat <- CreateSeuratObject(counts = sim_matrix, assay = "RNA", project = paste0(project_name, "_", sim_number))
     seurat$celltype <- celltypes
     
@@ -143,31 +155,18 @@ generate_simulations <- function(model_params,    # model fit created using scDe
     # Retrieve the corresponding annotations for the organism of interest 
     # Define human genes 
     malat1 <- c("MALAT1")
-      
-    # Extract appropriate gene subsets
-    mt_genes <- annotations %>%
-      dplyr::filter(grepl("MT-", gene_name)) %>% 
-      pull(gene_name)
-      
-    # Isolate ribosomal genes (RPS and RPL)
-    rb_genes <- annotations %>%
-     dplyr::filter(grepl("^RPS|^RPL", gene_name)) %>%
-     pull(gene_name)
-      
-    # combine mt and rb genes
-    mt_rb_genes <- unique(c(mt_genes, rb_genes))
-      
+    seurat$malat1 <- FetchData(seurat, vars = malat1)
     
     # Calculate the feature percentages and normalised expressions 
     seurat$mt.percent <- PercentageFeatureSet(
       object   = seurat,
-      features = intersect(mt_genes, rownames(seurat@assays$RNA)),
+      features = rownames(seurat@assays$RNA)[grepl("^MT-", rownames(seurat@assays$RNA))],
       assay    = "RNA"
     ) 
     
     seurat$rb.percent <- PercentageFeatureSet(
       object   = seurat,
-      features = intersect(rb_genes, rownames(seurat@assays$RNA)),
+      features = rownames(seurat@assays$RNA)[grepl("^RPS|^RPL", rownames(seurat@assays$RNA))],
       assay    = "RNA"
     ) 
     
@@ -176,22 +175,20 @@ generate_simulations <- function(model_params,    # model fit created using scDe
       features = malat1,
       assay    = "RNA"
     ) 
-    
-    seurat$malat1 <- FetchData(seurat, vars = malat1)
-    
+
     # Calculate psuedo-nuclear fraction score for DropletQC 
     seurat$nf_malat1 <- FetchData(seurat, vars = "MALAT1", layer = "counts")
     
     # min-max normalization: scales values so the min value maps to 0 and max maps to 1 (make the expression values more like nf scores)
     seurat$nf_malat1 <- (seurat$nf_malat1 - min(seurat$nf_malat1)) / (max(seurat$nf_malat1) - min(seurat$nf_malat1))
     
-    
     # Save final object (resembles output of 1.1 Preprocess for section B)
     saveRDS(seurat, file.path(output_dir, paste0(project_name, "_sim_", sim_number, "_seurat.rds")))
     
     
     # Viewing the data ----
-    # (my favourite part)
+    
+    if (generate_plot) {
     test <- NormalizeData(seurat) %>%
       FindVariableFeatures() %>%
       ScaleData() %>% 
@@ -227,25 +224,34 @@ generate_simulations <- function(model_params,    # model fit created using scDe
            height = 4, 
            units = "in",
            dpi = 300)
+    }
+    
   }
   
   # Generate and save the simulations
   for (i in 1:replicates) {
     generate_and_save_simulation(i)
   }
+  
 }
 
-# Generate simulated datasets§
-generate_simulations(model_params = control_model, 
-                     cell_type_prop = cell_type_proportion_control,
-                     project_name = "control")
+# Generate simulated datasets
+generate_simulations(model_params = low_pbmc_model, 
+                     cell_type_prop = cell_type_proportion_low,
+                     project_name = "low")
 
-generate_simulations(model_params = stimulated_model, 
-                     cell_type_prop = cell_type_proportion_stimulated,
-                     project_name = "stimulated")
+generate_simulations(model_params = high_pbmc_model, 
+                     cell_type_prop = cell_type_proportion_high,
+                     project_name = "high")
 
+
+simulated <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/high_sim_1_seurat.rds")
+
+library_size <- colSums(simulated)
 
 ### End 
+
+
 
 
                                               
