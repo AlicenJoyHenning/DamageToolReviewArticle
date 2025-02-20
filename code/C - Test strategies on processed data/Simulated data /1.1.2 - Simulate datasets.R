@@ -45,17 +45,25 @@ for (pkg in packages) {
 sample_sheet <- read.csv("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/unperturbed_data/sample_sheet.csv")
 sample_sheet$Origin_Condition <- paste0(sample_sheet$Origin, sample_sheet$Condition)
 sample_sheet$Name <- paste0(sample_sheet$Origin_Condition, "_R", sample_sheet$Replicate, "_SD", sample_sheet$Sequencing_depth, "_CT", sample_sheet$Celltype_number, "_CN", sample_sheet$Cell_number)
-sample_sheet$Plot <- ifelse()
+sample_sheet_subset <- sample_sheet %>% distinct(Name, .keep_all = TRUE)
+sample_sheet_subset$Plot <- ifelse(
+  grepl("SD2000", sample_sheet_subset$Name) & 
+    grepl("CN2000", sample_sheet_subset$Name) & 
+    grepl("R1", sample_sheet_subset$Name), 
+  "plot", 
+  "-"
+)
 
 # Core scRNAseq references
-high_pbmc <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_high_seurat.rds")
 high_pbmc_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_high_reference_matrix.rds")
-low_pbmc <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_low_seurat.rds")
 low_pbmc_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_low_reference_matrix.rds")
-covid <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_covid_seurat.rds")
 covid_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_covid_reference_matrix.rds")
-healthy <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_healthy_seurat.rds")
 healthy_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_healthy_reference_matrix.rds")
+
+dim(high_pbmc_matrix) # 986 genes 3000 cells
+dim(low_pbmc_matrix) # 980 genes 3000 cells
+dim(covid_matrix) # 2170 genes 3000 cells 
+dim(healthy_matrix) # 2093 genes 3000 cells 
 
 
 # Read in models (Fit scDesign2 models.R)
@@ -75,11 +83,14 @@ healthy_cellline_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage
 simulate_matrices <- function(
     origin, # "PH" "PL" "CH" "CC"
     replicate, # 1 2 3 
-    target_sequencing_depth, # 200, 500, 1000, 2000, 5000
-    target_celltypes,  # 1, 2, 3, 6
-    target_cellnumber, # 200, 500, 1000, 2000, 5000
+    sequencing_depth, # 200, 500, 1000, 2000, 5000
+    celltypes,  # 1, 2, 3, 6
+    cellnumber, # 200, 500, 1000, 2000, 5000
+    output_dir
 ){
+  
   # Define inputs for scDesign
+  project_name <- paste0(origin, "_R", replicate, "_SD", sequencing_depth, "_CT", celltypes, "_CN", cellnumber)
   
   # Dataset of origin related to counts & model
   if (origin == "PH"){
@@ -103,92 +114,96 @@ simulate_matrices <- function(
   }
   
   
+  # Replicate reproducibility 
+  if (replicate == 1){
+    set.seed(7)
+  }
+  
+  if (replicate == 2){
+    set.seed(77)
+  }
+  
+  if (replicate == 3){
+    set.seed(777)
+  }
+  
+  
   # Cell type selection 
-  Cell_Type_6 <- c("B", "DC", "Monocyte", "NK", "T", "pDC") 
-  Cell_Type_3 <- c("B", "Monocyte", "T") 
-  Cell_Type_2 <- c("CD8", "CD4") 
-  Cell_Type_1 <- c("CD4") 
+  if (celltypes == 6){
+    cell_type_selection <- c("B", "DC", "Monocyte", "NK", "T", "pDC") 
+  }
   
+  if (celltypes == 3){
+    cell_type_selection <- c("B", "Monocyte", "T") 
+  }
   
-  
-  # Proportion which these cell types exist 
-  cell_type_proportion <- table(colnames(high_pbmc_matrix))[cell_type_selection]
-  
-  
-}
+  if (celltypes == 2){
+    cell_type_selection <- c("CD8", "CD4") 
+  }
 
-
-
-
-    # scDesign2 to create count matrices 
-    sim_matrix <- simulate_count_scDesign2(model_params = model_params, 
-                                           n_cell_old = 3000, # true for all 
-                                           n_cell_new = target_cells, 
-                                           total_count_new = target_library_size, 
-                                           sim_method = 'copula',
-                                           cell_type_prop = cell_type_proportion)
+  if (celltypes == 1){
+    cell_type_selection <- c("CD4") 
+  }
   
+  # Proportion in which cell types exist 
+  cell_type_proportion <- table(colnames(count_matrix))[cell_type_selection]
+  
+  
+  # scDesign2 to create count matrices 
+  sim_matrix <- simulate_count_scDesign2(model_params = model, 
+                                         n_cell_old = 3000, # true for all 
+                                         n_cell_new = cellnumber, 
+                                         total_count_new = sequencing_depth, 
+                                         sim_method = 'copula',
+                                         cell_type_prop = cell_type_proportion)
+  
+  # Transfer gene names & extract cell barcodes 
+  rownames(sim_matrix) <- rownames(input_matrix)
+  write.csv(sim_matrix, file.path(output_dir, paste0(project_name, "_matrix.csv")))
+  
+  # Create Seurat object
+  seurat <- CreateSeuratObject(counts = sim_matrix, assay = "RNA", project = project_name)
+  seurat$celltype <- celltypes
+  
+  # Calculate standard quality control metrics ----- 
+  
+  # Retrieve the corresponding annotations for the organism of interest 
+  # Define human genes 
+  malat1 <- c("MALAT1")
+  seurat$malat1 <- FetchData(seurat, vars = malat1)
+  
+  # Calculate the feature percentages and normalised expressions 
+  seurat$mt.percent <- PercentageFeatureSet(
+    object   = seurat,
+    features = rownames(seurat@assays$RNA)[grepl("^MT-", rownames(seurat@assays$RNA))],
+    assay    = "RNA"
+  ) 
+  
+  seurat$rb.percent <- PercentageFeatureSet(
+    object   = seurat,
+    features = rownames(seurat@assays$RNA)[grepl("^RPS|^RPL", rownames(seurat@assays$RNA))],
+    assay    = "RNA"
+  ) 
+  
+  seurat$malat1.percent <- PercentageFeatureSet(
+    object   = seurat,
+    features = malat1,
+    assay    = "RNA"
+  ) 
+  
+  # Calculate psuedo-nuclear fraction score for DropletQC 
+  seurat$nf_malat1 <- FetchData(seurat, vars = "MALAT1", layer = "counts")
+  
+  # min-max normalization: scales values so the min value maps to 0 and max maps to 1 (make the expression values more like nf scores)
+  seurat$nf_malat1 <- (seurat$nf_malat1 - min(seurat$nf_malat1)) / (max(seurat$nf_malat1) - min(seurat$nf_malat1))
+  
+  # Save final object (resembles output of 1.1 Preprocess for section B)
+  saveRDS(seurat, file.path(output_dir, paste0(project_name, "_sim_", sim_number, "_seurat.rds")))
+  
+  # Viewing the data ----
+  
+  if (generate_plot) {
     
-    # Create matrix.csv and Seurat objects (rds) for downstream tool testing 
-    # Store current colnames 
-    celltypes <- colnames(sim_matrix)
-    
-    # Ensure clean cell barcodes
-    colnames(count_matrix) <- names(colnames(count_matrix))
-    
-    # Transfer gene names & extract cell barcodes 
-    rownames(sim_matrix) <- rownames(input_matrix)
-    
-    # Transfer barcodes to matrix and save
-    colnames(sim_matrix) <- sample(cell_barcodes, ncol(sim_matrix))
-    write.csv(sim_matrix, file.path(output_dir, paste0(project_name, "_sim_", sim_number, "_matrix.csv")))
-    
-    # Create Seurat object
-    #new_matrix <- as.matrix(sim_matrix)
-    #rownames(new_matrix) <- make.unique(rownames(sim_matrix))
-    #colnames(new_matrix) <- make.unique(colnames(sim_matrix))
-    seurat <- CreateSeuratObject(counts = sim_matrix, assay = "RNA", project = paste0(project_name, "_", sim_number))
-    seurat$celltype <- celltypes
-    
-    # Calculate standard quality control metrics ----- 
-    
-    # Retrieve the corresponding annotations for the organism of interest 
-    # Define human genes 
-    malat1 <- c("MALAT1")
-    seurat$malat1 <- FetchData(seurat, vars = malat1)
-    
-    # Calculate the feature percentages and normalised expressions 
-    seurat$mt.percent <- PercentageFeatureSet(
-      object   = seurat,
-      features = rownames(seurat@assays$RNA)[grepl("^MT-", rownames(seurat@assays$RNA))],
-      assay    = "RNA"
-    ) 
-    
-    seurat$rb.percent <- PercentageFeatureSet(
-      object   = seurat,
-      features = rownames(seurat@assays$RNA)[grepl("^RPS|^RPL", rownames(seurat@assays$RNA))],
-      assay    = "RNA"
-    ) 
-    
-    seurat$malat1.percent <- PercentageFeatureSet(
-      object   = seurat,
-      features = malat1,
-      assay    = "RNA"
-    ) 
-
-    # Calculate psuedo-nuclear fraction score for DropletQC 
-    seurat$nf_malat1 <- FetchData(seurat, vars = "MALAT1", layer = "counts")
-    
-    # min-max normalization: scales values so the min value maps to 0 and max maps to 1 (make the expression values more like nf scores)
-    seurat$nf_malat1 <- (seurat$nf_malat1 - min(seurat$nf_malat1)) / (max(seurat$nf_malat1) - min(seurat$nf_malat1))
-    
-    # Save final object (resembles output of 1.1 Preprocess for section B)
-    saveRDS(seurat, file.path(output_dir, paste0(project_name, "_sim_", sim_number, "_seurat.rds")))
-    
-    
-    # Viewing the data ----
-    
-    if (generate_plot) {
     test <- NormalizeData(seurat) %>%
       FindVariableFeatures() %>%
       ScaleData() %>% 
@@ -203,6 +218,8 @@ simulate_matrices <- function(
                  "DC" = "#A799C9",
                  "B" = "#BDC5EE",
                  "NK" = "#9DBD73",
+                 "CD4" = "#88A1CD",
+                 "CD8" = "#A6BEAE",
                  "damaged" = "red"
     )
     
@@ -211,6 +228,9 @@ simulate_matrices <- function(
       theme(panel.border = element_rect(colour = "black"))
     
     # MArkers 
+    if (origin %in% c("PH", "PL")){
+    
+    # PBMC CELLTYPES
     T_cells <- FeaturePlot(test, "CD3E") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
     B_cells <- FeaturePlot(test, "MS4A1") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
     NK_cells <- FeaturePlot(test, "NKG7") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
@@ -218,54 +238,36 @@ simulate_matrices <- function(
     
     plot <- clusters + ((T_cells | B_cells) / (NK_cells | Mon_cells))
     
-    ggsave(filename = file.path(output_dir, paste0(project_name, "_sim_", sim_number, "_markers.png")), 
+    } else {
+      
+      # T CELLTYPES
+      CD3E <- FeaturePlot(test, "CD3E") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      CD2 <- FeaturePlot(test, "CD2") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      GNLY <- FeaturePlot(test, "GNLY") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      GZMB <- FeaturePlot(test, "GZMB") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+ 
+      
+      plot <- clusters  ((CD3E | CD2) / (GNLY | GZMB)) 
+      
+    }
+    
+    ggsave(filename = file.path(output_dir, paste0(project_name, "_markers.png")), 
            plot, 
            width = 10, 
            height = 4, 
            units = "in",
            dpi = 300)
-    }
-    
   }
   
-  # Generate and save the simulations
-  for (i in 1:replicates) {
-    generate_and_save_simulation(i)
-  }
+  return(seurat)
   
 }
+  
 
-# Generate simulated datasets
-generate_simulations(model_params = low_pbmc_model, 
-                     cell_type_prop = cell_type_proportion_low,
-                     project_name = "low")
-
-generate_simulations(model_params = high_pbmc_model, 
-                     cell_type_prop = cell_type_proportion_high,
-                     project_name = "high")
+for sample in seq_along()
 
 
-simulated <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/high_sim_1_seurat.rds")
 
-library_size <- colSums(simulated)
 
 ### End 
-
-
-
-
-                                              
-                                              
-                                              
-                                              
-
-
-
-
-
-
-
-
-
-
 
