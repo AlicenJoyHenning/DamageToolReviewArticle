@@ -46,13 +46,12 @@ for (pkg in packages) {
 sample_sheet <- read.csv("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/unperturbed_data/sample_sheet.csv")
 sample_sheet$Origin_Condition <- paste0(sample_sheet$Origin, sample_sheet$Condition)
 sample_sheet$Name <- paste0(sample_sheet$Origin_Condition, "_R", sample_sheet$Replicate, "_SD", sample_sheet$Sequencing_depth, "_CT", sample_sheet$Celltype_number, "_CN", sample_sheet$Cell_number)
-sample_sheet_subset <- sample_sheet %>% distinct(Name, .keep_all = TRUE)
-
+# sample_sheet_subset <- sample_sheet %>% distinct(Name, .keep_all = TRUE)
 
 # Produce one plot per replicate to check quality
-sample_sheet_subset$Plot <- ifelse(
-    grepl("CN2000", sample_sheet_subset$Name) & 
-    grepl("R1", sample_sheet_subset$Name), 
+sample_sheet$Plot <- ifelse(
+    grepl("CN2000", sample_sheet$Name) & 
+    grepl("R1", sample_sheet$Name), 
   "TRUE", 
   "FALSE"
 )
@@ -103,10 +102,102 @@ CH_CT2_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbat
 
 
 # Simulate datasets using scDesign2----
+# - Generate control matrices
+# - Adds damage (simulate_damage)
+# - Calculates QC metrics 
+# - Plot output (if desired)
+
+# Function to introduce damage perturbation
+simulate_damage <- function(count_matrix, 
+                            damage_proportion, 
+                            organism = "Hsap",
+                            lambda = 10
+                            
+) {
+  
+  # Retrieve genes corresponding to the organism of interest
+  if (organism == "Hsap") {
+    mito_pattern <- "^MT-"
+    ribo_pattern <- "^(RPS|RPL)"
+  }
+  
+  # Randomly select proportion of cells to damage
+  total_cells <- ncol(count_matrix)
+  damaged_cell_number <- round(total_cells * damage_proportion)
+  damaged_cell_selections <- sample(seq_len(total_cells), size = damaged_cell_number, replace = FALSE)
+  
+  # Storage of damage levels for all cell barcodes for plotting later
+  damage_label <- data.frame(barcode = colnames(count_matrix)[damaged_cell_selections], status = rep("damaged", length(damaged_cell_selections)))
+  undamaged_cell_number_cells <- setdiff(seq_len(total_cells), damaged_cell_selections)
+  undamaged_cell_number <- data.frame(barcode = colnames(count_matrix)[undamaged_cell_number_cells], status = rep("control", length(undamaged_cell_number_cells)))
+  damage_label <- rbind(damage_label, undamaged_cell_number)
+  
+  
+  # Isolate gene set indices (consistent across cells, not subseting the matrix)
+  mito_idx <- grep(mito_pattern, rownames(count_matrix), ignore.case = FALSE)
+  ribo_idx <- grep(ribo_pattern, rownames(count_matrix), ignore.case = FALSE)
+  other_idx <- setdiff(seq_len(nrow(count_matrix)), union(mito_idx, ribo_idx))
+  
+  # Initialize for storing modified counts
+  new_matrix <- count_matrix
+  
+  # Define the number of Monte Carlo samples
+  n_samples <- 100000 # tested 1000 10000 100000 & found no helpful shift in shape from increasing
+  
+  # Loop over the damaged cells and apply the reduction to non-mito genes.
+  for (i in seq_along(damaged_cell_selections)) {
+    #i = 100  # JUST FOR TESTING
+    
+    # Index in the count matrix for the cell
+    cell <- damaged_cell_selections[i]
+    
+    # Compute initial gene sums in the cell
+    M_i <- sum(count_matrix[mito_idx, cell])  # Mitochondrial
+    R_i <- sum(count_matrix[ribo_idx, cell])  # Ribosomal
+    O_i <- sum(count_matrix[other_idx, cell]) # Other (non-mito & non-ribo)
+    T_i <- R_i + O_i  # Total non-mito counts (everything that must be reduced)
+    
+    # Monte Carlo sampling to estimate r
+    r_samples <- runif(n_samples, 0.01, 0.7)  # Generate random r values in [0,1]
+    
+    
+    # Compute A, B, and the absolute error for each sample
+    A_values <- (r_samples * R_i) / (M_i + r_samples * T_i)
+    B_values <- M_i / (M_i + r_samples * T_i)
+    exp_decay_values <- exp(-lambda * A_values)
+    errors <- abs(B_values - exp_decay_values)
+    
+    # Select the best r (minimizing the error)
+    best_r <- r_samples[which.min(errors)]
+    
+    # Apply reduction to non-mito genes (ribo and other genes) in this cell.
+    non_mito <- c(ribo_idx, other_idx)
+    new_matrix[non_mito, cell] <- round(best_r * count_matrix[non_mito, cell])
+    
+  }
+  
+  # QC statistics for all cells
+  qc_summary <- data.frame(
+    Cell = colnames(count_matrix),
+    Damaged_Status = damage_label$status[match(colnames(count_matrix), damage_label$barcode)],
+    Original_Features = colSums(count_matrix != 0),
+    New_Features = colSums(new_matrix != 0),
+    Original_MitoProp = colSums(count_matrix[mito_idx, , drop = FALSE]) / colSums(count_matrix),
+    New_MitoProp = colSums(new_matrix[mito_idx, , drop = FALSE]) / colSums(new_matrix),
+    Original_RiboProp = colSums(count_matrix[ribo_idx, , drop = FALSE]) / colSums(count_matrix),
+    New_RiboProp = colSums(new_matrix[ribo_idx, , drop = FALSE]) / colSums(new_matrix)
+  )
+  
+  # Return a list containing the new count matrix and the QC summary.
+  return(list(matrix = new_matrix, qc_summary = qc_summary))
+  
+}
+
 
 simulate_matrices <- function(
     origin, # "PH" "PL" "CH" "CC"
     replicate, # 1 2 3 
+    damage_level, # 2, 5, 10, 20, 50
     celltypes,  # 1, 2, 3, 6
     cellnumber, # 200, 500, 1000, 2000, 5000
     generate_plot,
@@ -114,7 +205,7 @@ simulate_matrices <- function(
 ){
   
   # Define inputs for scDesign
-  project_name <- paste0(origin, "_R", replicate, "_CT", celltypes, "_CN", cellnumber)
+  project_name <- paste0(origin, "_R", replicate, "_DL", damage_level, "_CT", celltypes, "_CN", cellnumber)
   origin_celltype <- paste0(origin, "_CT", celltypes)
   
   # Dataset of origin related to counts & model
@@ -213,21 +304,36 @@ simulate_matrices <- function(
                                          cell_type_prop = cell_type_proportion)
   
   
-  # Transfer gene names & extract cell barcodes 
-  # dim(sim_matrix)[1] == dim(sim_matrix)[1] # Must be TRUE
+  # Transfer gene names & assign cell identifiers 
   rownames(sim_matrix) <- rownames(count_matrix)
   celltypes <- colnames(sim_matrix)
-  colnames(sim_matrix) <- paste0(colnames(sim_matrix), "_", seq_len(dim(sim_matrix)[2])) # Keep cell types but ensure uniqueness
-  write.csv(sim_matrix, file.path(output_dir, paste0(project_name, "_matrix.csv")))
+ # write.csv(sim_matrix, file.path(output_dir, paste0(project_name, "_matrix.csv"))) # Don't need 
   
   # Testing the mito percentages 
-  mito_genes <- grepl("^MT-", rownames(sim_matrix))
-  percent_mito <- ((colSums(sim_matrix[mito_genes, , drop = FALSE])) / (colSums(sim_matrix))) * 100
-  max(percent_mito)
+  # mito_genes <- grepl("^MT-", rownames(sim_matrix))
+  # percent_mito <- ((colSums(sim_matrix[mito_genes, , drop = FALSE])) / (colSums(sim_matrix))) * 100
+  # max(percent_mito)
+  
+  # Add damage perturbation 
+  perturbed <- simulate_damage(
+    count_matrix = sim_matrix, 
+    damage_proportion = (damage_level / 100)
+    )
+
+  # Extract damage level & add to cell annotations
+  colnames(perturbed$matrix) <- paste0(colnames(perturbed$matrix), "_", seq_len(dim(perturbed$matrix)[2])) # Keep cell types but ensure uniqueness
+  
+  output <- perturbed$qc_summary
+  output <- output[, c("Cell", "Damaged_Status")]
+  perturbed_celltypes <- data.frame(celltypes)
+  perturbed_celltypes$Cell <- colnames(perturbed$matrix)
+  perturbed_celltypes$Annotation <- output$Damaged_Status[match(output$Cell, perturbed_celltypes$Cell)]
+  perturbed_celltypes$Perturbed_annotation <- ifelse(perturbed_celltypes$Annotation == "damaged", "damaged", perturbed_celltypes$celltypes)
   
   # Create Seurat object
-  seurat <- CreateSeuratObject(counts = sim_matrix, assay = "RNA", project = project_name)
-  seurat$celltype <- celltypes
+  seurat <- CreateSeuratObject(counts = perturbed$matrix, assay = "RNA", project = project_name)
+  seurat$celltype <-  perturbed_celltypes$Perturbed_annotation
+  # damage status 
   
   # Calculate standard quality control metrics ----- 
   
@@ -326,16 +432,18 @@ simulate_matrices <- function(
   
 }
 
+
 # Iterate through sample sheet extracting parameters from entries
 simulated_matrices <- list()
 for (sample in seq_len(nrow(sample_sheet_subset))) {
   
   store <- simulate_matrices(
-    origin = paste0(sample_sheet_subset$Origin[sample], sample_sheet_subset$Condition[sample]), 
-    replicate = sample_sheet_subset$Replicate[sample], 
-    celltypes = sample_sheet_subset$Celltype_number[sample], 
-    cellnumber = sample_sheet_subset$Cell_number[sample], 
-    generate_plot = sample_sheet_subset$Plot[sample], 
+    origin = paste0(sample_sheet$Origin[sample], sample_sheet$Condition[sample]), 
+    replicate = sample_sheet$Replicate[sample], 
+    damage_level = sample_sheet$Damage_level[sample], 
+    celltypes = sample_sheet$Celltype_number[sample], 
+    cellnumber = sample_sheet$Cell_number[sample], 
+    generate_plot = sample_sheet$Plot[sample], 
     output_dir = "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/unperturbed_data/control_simulated_matrices/"
   )
   
