@@ -28,8 +28,9 @@
 #install.packages("copula")
 
 # Load all packages 
-packages <- c("AnnotationHub", "scDesign2", "copula", "dplyr", "reshape2", "gridExtra", 
-              "Seurat", "ggpubr", "gtable", "cowplot", "ggplot2")
+packages <- c("AnnotationHub", "scDesign2", "cluster", "copula", "dplyr", 
+              "reshape2", "ggdendro", "gridExtra", "Seurat", "ggpubr", 
+              "gtable", "cowplot", "ggplot2")
 
 for (pkg in packages) {
   if (!require(pkg, character.only = TRUE)) {
@@ -46,31 +47,54 @@ sample_sheet <- read.csv("/Users/alicen/Projects/Damage_analsyis/damage_perturba
 sample_sheet$Origin_Condition <- paste0(sample_sheet$Origin, sample_sheet$Condition)
 sample_sheet$Name <- paste0(sample_sheet$Origin_Condition, "_R", sample_sheet$Replicate, "_SD", sample_sheet$Sequencing_depth, "_CT", sample_sheet$Celltype_number, "_CN", sample_sheet$Cell_number)
 sample_sheet_subset <- sample_sheet %>% distinct(Name, .keep_all = TRUE)
+
+
+# Produce one plot per replicate to check quality
 sample_sheet_subset$Plot <- ifelse(
-  grepl("SD2000", sample_sheet_subset$Name) & 
     grepl("CN2000", sample_sheet_subset$Name) & 
     grepl("R1", sample_sheet_subset$Name), 
-  "plot", 
-  "-"
+  "TRUE", 
+  "FALSE"
 )
 
-# Core scRNAseq references
-high_pbmc_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_high_reference_matrix.rds")
-low_pbmc_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_low_reference_matrix.rds")
-covid_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_covid_reference_matrix.rds")
-healthy_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/Cellline_healthy_reference_matrix.rds")
+# Testing on smaller subsets
+# sample_sheet_subset <- subset(sample_sheet_subset, Plot == "TRUE")
 
-dim(high_pbmc_matrix) # 986 genes 3000 cells
-dim(low_pbmc_matrix) # 980 genes 3000 cells
-dim(covid_matrix) # 2170 genes 3000 cells 
-dim(healthy_matrix) # 2093 genes 3000 cells 
+# Core scRNAseq reference datasets of origin & number of cell types included 
+# PH : PBMC High responders 
+# PL : PBMC Low responders 
+# CC : Cell line COVID19 
+# CH : Cell line healthy controls
 
+# Matrices
+PH_CT6_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_high_CT6_reference_matrix.rds")
+PH_CT4_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_high_CT4_reference_matrix.rds")
+PH_CT3_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_high_CT3_reference_matrix.rds")
+PL_CT6_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_low_CT6_reference_matrix.rds")
+PL_CT4_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_low_CT4_reference_matrix.rds")
+PL_CT3_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_low_CT3_reference_matrix.rds")
+CC_CT1_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/Cellline_covid_CT1_reference_matrix.rds")
+CC_CT2_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/Cellline_covid_CT2_reference_matrix.rds")
+CH_CT1_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/Cellline_healthy_CT1_reference_matrix.rds")
+CH_CT2_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/Cellline_healthy_CT2_reference_matrix.rds")
+
+# Checking gene & cell numbers 
+dim(PH_CT6_matrix) #  32738 genes 3000 cells 
+dim(PL_CT6_matrix) # 32738 genes 3000 cells
+dim(CC_CT2_matrix) # 33538 genes 3000 cells 
+dim(CH_CT2_matrix) # 33538 genes 3000 cells 
 
 # Read in models (Fit scDesign2 models.R)
-low_pbmc_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_low_model.rds")
-high_pbmc_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/PBMC_high_model.rds")
-covid_cellline_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/cellline_covid_model.rds")
-healthy_cellline_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/filter_genes_0.2/models/cellline_healthy_model.rds")
+PH_CT6_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_high_CT6_model.rds")
+PH_CT4_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_high_CT4_model.rds")
+PH_CT3_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_high_CT3_model.rds")
+PL_CT6_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_low_CT6_model.rds")
+PL_CT4_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_low_CT4_model.rds")
+PL_CT3_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/PBMC_low_CT3_model.rds")
+CC_CT1_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/cellline_covid_CT1_model.rds")
+CC_CT2_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/cellline_covid_CT2_model.rds")
+CH_CT1_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/cellline_healthy_CT1_model.rds")
+CH_CT2_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/cellline_healthy_CT2_model.rds")
 
 
 #-------------------------------------------------------------------------------
@@ -83,34 +107,65 @@ healthy_cellline_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage
 simulate_matrices <- function(
     origin, # "PH" "PL" "CH" "CC"
     replicate, # 1 2 3 
-    sequencing_depth, # 200, 500, 1000, 2000, 5000
     celltypes,  # 1, 2, 3, 6
     cellnumber, # 200, 500, 1000, 2000, 5000
+    generate_plot,
     output_dir
 ){
   
   # Define inputs for scDesign
-  project_name <- paste0(origin, "_R", replicate, "_SD", sequencing_depth, "_CT", celltypes, "_CN", cellnumber)
+  project_name <- paste0(origin, "_R", replicate, "_CT", celltypes, "_CN", cellnumber)
+  origin_celltype <- paste0(origin, "_CT", celltypes)
   
   # Dataset of origin related to counts & model
-  if (origin == "PH"){
-    count_matrix <- high_pbmc_matrix
-    model <- high_pbmc_model
+  if (origin_celltype == "PH_CT6"){
+    count_matrix <- PH_CT6_matrix
+    model <- PH_CT6_model
   }
   
-  if (origin == "PL"){
-    count_matrix <- low_pbmc_matrix
-    model <- low_pbmc_model
+  if (origin_celltype == "PH_CT4"){
+    count_matrix <- PH_CT4_matrix
+    model <- PH_CT4_model
   }
   
-  if (origin == "CC"){
-    count_matrix <- covid_matrix
-    model <- covid_cellline_model
+  if (origin_celltype == "PH_CT3"){
+    count_matrix <- PH_CT3_matrix
+    model <- PH_CT3_model
   }
   
-  if (origin == "CH"){
-    count_matrix <- healthy_matrix
-    model <- healthy_cellline_model
+  if (origin_celltype == "PL_CT6"){
+    count_matrix <- PL_CT6_matrix
+    model <- PL_CT6_model
+  }
+  
+  if (origin_celltype == "PL_CT4"){
+    count_matrix <- PL_CT4_matrix
+    model <- PL_CT4_model
+  }
+  
+  if (origin_celltype == "PL_CT3"){
+    count_matrix <- PL_CT3_matrix
+    model <- PL_CT3_model
+  }
+  
+  if (origin_celltype == "CC_CT1"){
+    count_matrix <- CC_CT1_matrix
+    model <- CC_CT1_model
+  }
+  
+  if (origin_celltype == "CC_CT2"){
+    count_matrix <- CC_CT2_matrix
+    model <- CC_CT2_model
+  }
+  
+  if (origin_celltype == "CH_CT1"){
+    count_matrix <- CH_CT1_matrix
+    model <- CH_CT1_model
+  }
+
+  if (origin_celltype == "CH_CT2"){
+    count_matrix <- CH_CT2_matrix
+    model <- CH_CT2_model
   }
   
   
@@ -127,10 +182,13 @@ simulate_matrices <- function(
     set.seed(777)
   }
   
-  
   # Cell type selection 
   if (celltypes == 6){
     cell_type_selection <- c("B", "DC", "Monocyte", "NK", "T", "pDC") 
+  }
+  
+  if (celltypes == 4){
+    cell_type_selection <- c("B", "Monocyte", "T" , "NK") 
   }
   
   if (celltypes == 3){
@@ -140,7 +198,7 @@ simulate_matrices <- function(
   if (celltypes == 2){
     cell_type_selection <- c("CD8", "CD4") 
   }
-
+  
   if (celltypes == 1){
     cell_type_selection <- c("CD4") 
   }
@@ -148,18 +206,24 @@ simulate_matrices <- function(
   # Proportion in which cell types exist 
   cell_type_proportion <- table(colnames(count_matrix))[cell_type_selection]
   
-  
   # scDesign2 to create count matrices 
   sim_matrix <- simulate_count_scDesign2(model_params = model, 
-                                         n_cell_old = 3000, # true for all 
                                          n_cell_new = cellnumber, 
-                                         total_count_new = sequencing_depth, 
                                          sim_method = 'copula',
                                          cell_type_prop = cell_type_proportion)
   
+  
   # Transfer gene names & extract cell barcodes 
-  rownames(sim_matrix) <- rownames(input_matrix)
+  # dim(sim_matrix)[1] == dim(sim_matrix)[1] # Must be TRUE
+  rownames(sim_matrix) <- rownames(count_matrix)
+  celltypes <- colnames(sim_matrix)
+  colnames(sim_matrix) <- paste0(colnames(sim_matrix), "_", seq_len(dim(sim_matrix)[2])) # Keep cell types but ensure uniqueness
   write.csv(sim_matrix, file.path(output_dir, paste0(project_name, "_matrix.csv")))
+  
+  # Testing the mito percentages 
+  mito_genes <- grepl("^MT-", rownames(sim_matrix))
+  percent_mito <- ((colSums(sim_matrix[mito_genes, , drop = FALSE])) / (colSums(sim_matrix))) * 100
+  max(percent_mito)
   
   # Create Seurat object
   seurat <- CreateSeuratObject(counts = sim_matrix, assay = "RNA", project = project_name)
@@ -175,9 +239,8 @@ simulate_matrices <- function(
   # Calculate the feature percentages and normalised expressions 
   seurat$mt.percent <- PercentageFeatureSet(
     object   = seurat,
-    features = rownames(seurat@assays$RNA)[grepl("^MT-", rownames(seurat@assays$RNA))],
-    assay    = "RNA"
-  ) 
+    features = rownames(seurat)[grepl("^MT-", rownames(seurat))]
+  )
   
   seurat$rb.percent <- PercentageFeatureSet(
     object   = seurat,
@@ -198,10 +261,9 @@ simulate_matrices <- function(
   seurat$nf_malat1 <- (seurat$nf_malat1 - min(seurat$nf_malat1)) / (max(seurat$nf_malat1) - min(seurat$nf_malat1))
   
   # Save final object (resembles output of 1.1 Preprocess for section B)
-  saveRDS(seurat, file.path(output_dir, paste0(project_name, "_sim_", sim_number, "_seurat.rds")))
+  saveRDS(seurat, file.path(output_dir, paste0(project_name, "_seurat.rds")))
   
   # Viewing the data ----
-  
   if (generate_plot) {
     
     test <- NormalizeData(seurat) %>%
@@ -212,14 +274,15 @@ simulate_matrices <- function(
       FindClusters() %>% 
       RunUMAP(dims = 1:30)
     
-    # Note that these markers applicable for immune/PBMCs
+    # Note that these markers applicable for immune/PBMCs and T cell line, not generalizable 
     colours <- c("T" = "#A6BEAE",
                  "Monocyte" = "#88A1CD",
                  "DC" = "#A799C9",
                  "B" = "#BDC5EE",
                  "NK" = "#9DBD73",
-                 "CD4" = "#88A1CD",
-                 "CD8" = "#A6BEAE",
+                 "pDC" = "#E7948C",
+                 "CD4" = "#A6BEAE",
+                 "CD8" =  "#BDC5EE",
                  "damaged" = "red"
     )
     
@@ -229,31 +292,31 @@ simulate_matrices <- function(
     
     # MArkers 
     if (origin %in% c("PH", "PL")){
-    
-    # PBMC CELLTYPES
-    T_cells <- FeaturePlot(test, "CD3E") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
-    B_cells <- FeaturePlot(test, "MS4A1") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
-    NK_cells <- FeaturePlot(test, "NKG7") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
-    Mon_cells <- FeaturePlot(test, "CD14") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
-    
-    plot <- clusters + ((T_cells | B_cells) / (NK_cells | Mon_cells))
-    
+      
+      # PBMC CELLTYPES
+      T_cells <- FeaturePlot(test, "CD3E", cols = c("#E5E1E1", "#88A1CD")) + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      B_cells <- FeaturePlot(test, "CD79A", cols = c("#E1E1E1", "#88A1CD")) + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      NK_cells <- FeaturePlot(test, "NKG7", cols = c("#E1E1E1", "#88A1CD")) + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      Mon_cells <- FeaturePlot(test, "CD14", cols = c("#E1E1E1", "#88A1CD")) + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      
+      plot <- clusters + ((T_cells | B_cells) / (NK_cells | Mon_cells))
+      
     } else {
       
       # T CELLTYPES
-      CD3E <- FeaturePlot(test, "CD3E") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
-      CD2 <- FeaturePlot(test, "CD2") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
-      GNLY <- FeaturePlot(test, "GNLY") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
-      GZMB <- FeaturePlot(test, "GZMB") + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
- 
+      CD3E <- FeaturePlot(test, "CD3E", cols = c("#E1E1E1", "#88A1CD")) + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      CD2 <- FeaturePlot(test, "CD2", cols = c("#E1E1E1", "#88A1CD")) + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      GNLY <- FeaturePlot(test, "GNLY", cols = c("#E1E1E1", "#88A1CD")) + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
+      GZMB <- FeaturePlot(test, "GZMB", cols = c("#E1E1E1", "#88A1CD")) + NoAxes() + NoLegend() + theme(panel.border = element_rect(colour = "black"))
       
-      plot <- clusters  ((CD3E | CD2) / (GNLY | GZMB)) 
+      
+      plot <- clusters + ((CD3E | CD2) / (GNLY | GZMB)) 
       
     }
     
     ggsave(filename = file.path(output_dir, paste0(project_name, "_markers.png")), 
            plot, 
-           width = 10, 
+           width = 8, 
            height = 4, 
            units = "in",
            dpi = 300)
@@ -262,12 +325,21 @@ simulate_matrices <- function(
   return(seurat)
   
 }
+
+# Iterate through sample sheet extracting parameters from entries
+simulated_matrices <- list()
+for (sample in seq_len(nrow(sample_sheet_subset))) {
   
-
-for sample in seq_along()
-
-
-
+  store <- simulate_matrices(
+    origin = paste0(sample_sheet_subset$Origin[sample], sample_sheet_subset$Condition[sample]), 
+    replicate = sample_sheet_subset$Replicate[sample], 
+    celltypes = sample_sheet_subset$Celltype_number[sample], 
+    cellnumber = sample_sheet_subset$Cell_number[sample], 
+    generate_plot = sample_sheet_subset$Plot[sample], 
+    output_dir = "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/unperturbed_data/control_simulated_matrices/"
+  )
+  
+  simulated_matrices[[sample]] <- store
+}
 
 ### End 
-
