@@ -13,7 +13,7 @@
 # 2. Run scResign2 to create simulated datasets for the control and stimulated reference data
 #     - Includes generating the counts 
 #     - Renaming output to create Seurat object with relevant meta data columns 
-#     - Calculating QC metrics so the Seurat object can enter straight into damaged stratergy testing 
+#     - Calculating QC metrics so the Seurat object can enter straight into damaged strategy testing 
 #     - Outputting images of each simulated dataset to see clustering and marker expression 
 # 
 
@@ -28,7 +28,7 @@
 #install.packages("copula")
 
 # Load all packages 
-packages <- c("AnnotationHub", "scDesign2", "cluster", "copula", "dplyr", 
+packages <- c("scDesign2", "cluster", "copula", "dplyr", 
               "reshape2", "ggdendro", "gridExtra", "Seurat", "ggpubr", 
               "gtable", "cowplot", "ggplot2")
 
@@ -43,13 +43,14 @@ for (pkg in packages) {
 #-------------------------------------------------------------------------------
 
 # Sample sheet (guide)
-sample_sheet <- read.csv("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/unperturbed_data/sample_sheet.csv")
+sample_sheet <- read.csv("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/sample_sheet.csv")
 sample_sheet$Origin_Condition <- paste0(sample_sheet$Origin, sample_sheet$Condition)
-sample_sheet$Name <- paste0(sample_sheet$Origin_Condition, "_R", sample_sheet$Replicate, "_SD", sample_sheet$Sequencing_depth, "_CT", sample_sheet$Celltype_number, "_CN", sample_sheet$Cell_number)
+sample_sheet$Name <- paste0(sample_sheet$Origin_Condition, "_R", sample_sheet$Replicate, "_DL", sample_sheet$Damage_level, "_CT", sample_sheet$Celltype_number, "_CN", sample_sheet$Cell_number)
+sample_sheet <- sample_sheet %>% distinct(Name, .keep_all = TRUE)
 
 # Produce one plot per replicate to check quality
 sample_sheet$Plot <- ifelse(
-    grepl("CN2000", sample_sheet$Name) & 
+  grepl("CN2000", sample_sheet$Name) & 
     grepl("R1", sample_sheet$Name), 
   "TRUE", 
   "FALSE"
@@ -71,7 +72,8 @@ PL_CT3_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturba
 CC_CT1_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/Cellline_covid_CT1_reference_matrix.rds")
 CC_CT2_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/Cellline_covid_CT2_reference_matrix.rds")
 CH_CT1_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/Cellline_healthy_CT1_reference_matrix.rds")
-CH_CT2_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/Cellline_healthy_CT1_reference_matrix.rds")
+CH_CT2_matrix <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/modelling/unfiltered_genes/models/Cellline_healthy_CT2_reference_matrix.rds")
+
 
 # Checking gene & cell numbers 
 dim(PH_CT6_matrix) #  32738 genes 3000 cells 
@@ -107,15 +109,8 @@ CH_CT2_model <- readRDS("/Users/alicen/Projects/Damage_analsyis/damage_perturbat
 simulate_damage <- function(count_matrix, 
                             damage_proportion, 
                             organism = "Hsap",
-                            lambda = 10
-                            
+                            lambda = 7
 ) {
-  
-  # Retrieve genes corresponding to the organism of interest
-  if (organism == "Hsap") {
-    mito_pattern <- "^MT-"
-    ribo_pattern <- "^(RPS|RPL)"
-  }
   
   # Calculate the target number of damaged cells given proportion 
   total_cells <- ncol(count_matrix)
@@ -151,9 +146,17 @@ simulate_damage <- function(count_matrix,
   undamaged_cell_number <- data.frame(barcode = colnames(count_matrix)[undamaged_cell_number_cells], status = rep("control", length(undamaged_cell_number_cells)))
   damage_label <- rbind(damage_label, undamaged_cell_number)
   
-
-  # Isolate gene set indices (consistent across cells, not subseting the matrix)
+  # Retrieve genes corresponding to the organism of interest
+  if (organism == "Hsap") {
+    mito_pattern <- "^MT-"
+    ribo_pattern <- "^(RPS|RPL)"
+    nuclear <- c("FIRRE", "NEAT1","XIST", "MALAT1", "MIAT", "MEG3", "KCNQ1OT1", "HOXA11-AS", "FTX") 
+  }
+  
+  # Isolate gene set indices (consistent across cells, not subsetting the matrix)
   mito_idx <- grep(mito_pattern, rownames(count_matrix), ignore.case = FALSE)
+  nucl_idx <- which(rownames(count_matrix) %in% nuclear)
+  mito_idx <- c(mito_idx, nucl_idx)
   ribo_idx <- grep(ribo_pattern, rownames(count_matrix), ignore.case = FALSE)
   other_idx <- setdiff(seq_len(nrow(count_matrix)), union(mito_idx, ribo_idx))
   
@@ -177,8 +180,7 @@ simulate_damage <- function(count_matrix,
     T_i <- R_i + O_i  # Total non-mito counts (everything that must be reduced)
     
     # Monte Carlo sampling to estimate r
-    r_samples <- runif(n_samples, 0.01, 0.7)  # Generate random r values in [0,1]
-    
+    r_samples <- runif(n_samples, 0.01, 0.7)  # 0.01 - 0.7 to 0.1 - 0.7 to 0.05 to 0.5 test if less intense
     
     # Compute A, B, and the absolute error for each sample
     A_values <- (r_samples * R_i) / (M_i + r_samples * T_i)
@@ -195,6 +197,7 @@ simulate_damage <- function(count_matrix,
     
   }
   
+  # isolated indices for correct ordering of damage status 
   matched_indices <- match(colnames(count_matrix), damage_label$barcode)
   
   # QC statistics for all cells
@@ -274,7 +277,7 @@ simulate_matrices <- function(
     count_matrix <- CH_CT1_matrix
     model <- CH_CT1_model
   }
-
+  
   if (origin_celltype == "CH_CT2"){
     count_matrix <- CH_CT2_matrix
     model <- CH_CT2_model
@@ -328,13 +331,13 @@ simulate_matrices <- function(
   # Transfer gene names & assign cell identifiers 
   rownames(sim_matrix) <- rownames(count_matrix)
   celltypes <- colnames(sim_matrix)
-
+  
   # Apply damage perturbation 
   perturbed <- simulate_damage(
     count_matrix = sim_matrix, 
     damage_proportion = (damage_level / 100)
-    )
-
+  )
+  
   # Extract damage level & add to cell annotations
   output <- perturbed$qc_summary
   output <- output[, c("Cell", "Damaged_Status")]
@@ -351,9 +354,7 @@ simulate_matrices <- function(
   # Calculate standard quality control metrics ----- 
   
   # Retrieve the corresponding annotations for the organism of interest 
-  # Define human genes 
-  malat1 <- c("MALAT1")
-  seurat$malat1 <- FetchData(seurat, vars = malat1)
+  seurat <- NormalizeData(seurat)
   
   # Calculate the feature percentages and normalised expressions 
   seurat$mt.percent <- PercentageFeatureSet(
@@ -366,18 +367,12 @@ simulate_matrices <- function(
     features = rownames(seurat@assays$RNA)[grepl("^RPS|^RPL", rownames(seurat@assays$RNA))],
     assay    = "RNA"
   ) 
-  
-  seurat$malat1.percent <- PercentageFeatureSet(
-    object   = seurat,
-    features = malat1,
-    assay    = "RNA"
-  ) 
+
   
   # Calculate psuedo-nuclear fraction score for DropletQC 
+  seurat$malat1 <- FetchData(seurat, vars = "MALAT1", layer = "data") # data is default 
   seurat$nf_malat1 <- FetchData(seurat, vars = "MALAT1", layer = "counts")
-  
-  # min-max normalization: scales values so the min value maps to 0 and max maps to 1 (make the expression values more like nf scores)
-  seurat$nf_malat1 <- (seurat$nf_malat1 - min(seurat$nf_malat1)) / (max(seurat$nf_malat1) - min(seurat$nf_malat1))
+  seurat$nf_malat1 <- (seurat$malat1 - min(seurat$malat1)) / (max(seurat$malat1) - min(seurat$malat1))
   
   # Save final object (resembles output of 1.1 Preprocess for section B)
   saveRDS(seurat, file.path(output_dir, paste0(project_name, "_seurat.rds")))
@@ -385,8 +380,7 @@ simulate_matrices <- function(
   # Viewing the data ----
   if (generate_plot) {
     
-    test <- NormalizeData(seurat) %>%
-      FindVariableFeatures() %>%
+    test <- FindVariableFeatures(seurat) %>% # Already done the normalisation step
       ScaleData() %>% 
       RunPCA() %>%
       FindNeighbors(dims = 1:30) %>% 
@@ -457,7 +451,7 @@ for (sample in seq_len(nrow(sample_sheet))) {
     celltypes = sample_sheet$Celltype_number[sample], 
     cellnumber = sample_sheet$Cell_number[sample], 
     generate_plot = sample_sheet$Plot[sample], 
-    output_dir = "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/unperturbed_data/control_simulated_matrices/"
+    output_dir = "/Users/alicen/Projects/Damage_analsyis/damage_perturbation/scDesign2/output_data/control_simulated_matrices/"
   )
   
   simulated_matrices[[sample]] <- store
