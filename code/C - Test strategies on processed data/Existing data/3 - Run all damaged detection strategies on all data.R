@@ -33,7 +33,7 @@
 #devtools::install_github('wmacnair/SampleQC')
 
 packages <- c("BiocStyle", "cowplot", "devtools", "dplyr", "ggplot2", "glmGamPoi", "Matrix", "robustbase",
-              "png", "Seurat", "tidyr", "SampleQC",
+              "png", "Seurat", "tidyr", "SampleQC", "ddqcR",
               "miQC",  "SingleCellExperiment", "scater",
               "scuttle", "SummarizedExperiment", "presto", "valiDrops", "DropletQC")
 
@@ -44,46 +44,16 @@ for (pkg in packages) {
 }
 
 
-# Set the working directory to the Zenodo directory 
-# setwd("/Users/name/Zenodo")
-setwd("/Users/alicen/Projects/ReviewArticle/Zenodo")
-
-
 # Load processed datasets ----
+# Read in all .rds files & save as name in list 
+directory <- "/Users/alicen/Projects/Damage_analsyis/data"
 
-# Ground truth 
-GM18507_dead <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/GM18507_dead_control.rds")
-GM18507_dying <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/GM18507_dying_control.rds")
-HEK293_apo <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/HEK293_apo_control.rds")
-HEK293_pro <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/HEK293_pro_control.rds")
-PDX_dead <- readRDS("./C_Test_Strategies/data/preprocess_groundtruth/PDX_dead_control.rds")
+# Extract filenames without the .rds extension to use as list names
+file_paths <- list.files(path = directory, pattern = "\\.rds$", full.names = TRUE)
+file_names <- gsub(pattern = "\\.rds$", replacement = "", x = basename(file_paths))
 
-
-# Cell lines 
-A549 <- readRDS("./C_Test_Strategies/data/preprocess_output/A549_processed.rds")
-HCT116 <- readRDS("./C_Test_Strategies/data/preprocess_output/HCT116_processed.rds")
-Jurkat <- readRDS("./C_Test_Strategies/data/preprocess_output/jurkat_processed.rds")
-
-# Healthy, human tissue extracts
-hLiver <- readRDS("./C_Test_Strategies/data/preprocess_output/hLiver_processed.rds")
-hLung <- readRDS("./C_Test_Strategies/data/preprocess_output/hLung_processed.rds")
-hPBMC <- readRDS("./C_Test_Strategies/data/preprocess_output/hPBMC_processed.rds")
-
-# Diseased, human tissue extracts
-dLiver <- readRDS("./C_Test_Strategies/data/preprocess_output/dLiver_processed.rds")
-dLung <- readRDS("./C_Test_Strategies/data/preprocess_output/dLung_processed.rds")
-dPBMC <- readRDS("./C_Test_Strategies/data/preprocess_output/dPBMC_processed.rds")
-
-# Mouse tissue extracts 
-mLiver <- readRDS("./C_Test_Strategies/data/preprocess_output/mLiver_processed.rds")
-mLung <- readRDS("./C_Test_Strategies/data/preprocess_output/mLung_processed.rds")
-mPBMC <- readRDS("./C_Test_Strategies/data/preprocess_output/mPBMC_processed.rds")
-
-# Tumour isolates 
-ductal <- readRDS("./C_Test_Strategies/data/preprocess_output/ductal_processed.rds")
-glio <- readRDS("./C_Test_Strategies/data/preprocess_output/glio_processed.rds")
-hodgkin <- readRDS("./C_Test_Strategies/data/preprocess_output/hodgkin_processed.rds")
-
+# Read each .rds file and store in a named list
+datasets <- setNames(lapply(file_paths, readRDS), file_names)
 
 
 #-------------------------------------------------------------------------------
@@ -92,148 +62,181 @@ hodgkin <- readRDS("./C_Test_Strategies/data/preprocess_output/hodgkin_processed
 
 
 # Function for main benchmarking ------
+# Testing
+input_data <- datasets$CC_R1_DL10_CT2_CN2000
+project_name <- "CC_R1_DL10_CT2_CN2000"
+
+input_data <- datasets$A549_processed
+project_name <- "CC_R1_DL10_CT2_CN2000"
 
 benchmark <- function(
-    seurat, 
+    input_data, 
     project_name,        # string with dataset identifier 
     organism = "Hsap",   # Either Hsap or Mmus
     model_method = NULL, # Adjustable, alternative to specify the model type "linear", "spline", "polynomial", or "one_dimensional"
-    ddqc_path,           # path to output ddqc labels 
-    ensembleKQC_path,    # path to output ensembleKQC labels 
-    view_plot = FALSE,   # whether to display miQC plot (feature vs mito percent)
-    output_plot = FALSE,  # output final strategy comparison plots
-    output_path = "./C_Test_Strategies/data/benchmark_output"   # Can be altered       
-    
+    output_path = "/Users/alicen/Projects/Damage_analsyis/test_strategies/strategy_output"   # Can be altered      
 ){
   
   message("\nBegin testing ", project_name, "...")
   
-  # Tool 1: ddqc -------
+  # Tool 1: DamageDetective -------
+  message("Tool 1: DamageDetective ...")
+  DamageDetective_start <- Sys.time()
   
-  message("Tool 1: ddqc ...")
-  
-  # Read in ddqc results 
-  ddqc_results <- read.csv2(ddqc_path, sep = ',')
-  ddqc_results <- ddqc_results[, c("barcodekey", "passed_qc")]
+  limiric_output <- limiric(
+    project_name = project_name,
+    filter_rbc   = FALSE,
+    seurat_input = input_data,
+    filter_output = FALSE,
+    output_path  = tempdir()
+  )
   
   # Add to Seurat 
-  seurat$ddqc <- ddqc_results$passed_qc[match(ddqc_results$barcodekey, rownames(seurat@meta.data))]
-  seurat$ddqc <- ifelse(seurat$ddqc == "False", "damaged", "cell")
-  seurat$ddqc <- ifelse(is.na(seurat$ddqc), "cell", seurat$ddqc)
+  input_data$DamageDetective <- limiric_output$limiric
   
+  DamageDetective_end <- Sys.time()
   
-  # Tool 2: ensembleKQC -------
+  # Record time 
+  DamageDetective_duration <- as.numeric(difftime(DamageDetective_end, DamageDetective_start, units = "secs"))
   
-  message("Tool 2: EnsembleKQC ...")
+  # Tool 2: ddqc -------
+  message("Tool 2: ddqc ...")
+  ddqc_start <- Sys.time()
   
-  # Read in output and add to Seurat meta data 
-  ensembleKQC_results <- suppressWarnings(read.csv2(ensembleKQC_path, sep = ',', col.names = "EnsembleKQC"))
-  seurat$ensembleKQC <- ensembleKQC_results$EnsembleKQC[match(rownames(ensembleKQC_results), rownames(seurat@meta.data))]
-  seurat$ensembleKQC <- ifelse(is.na(seurat$ensembleKQC), "cell", seurat$ensembleKQC)
+  # Requires seurat object with named mito and ribosomal percentage columns
+  input_data$percent.mt <- input_data$mt.percent
+  input_data$percent.rb <- input_data$rb.percent
+  ddqc_results <- ddqc.metrics(input_data) 
+
+  # Add to Seurat 
+  input_data$ddqc <- ddqc_results$passed.qc[match(rownames(input_data@meta.data), rownames(ddqc_results))]
+  input_data$ddqc <- ifelse(input_data$ddqc == "FALSE", "damaged", "cell")
+
+  ddqc_end <- Sys.time()
+  
+  # Record time 
+  ddqc_duration <- as.numeric(difftime(ddqc_end, ddqc_start, units = "secs"))
   
   # Tool 3: DropletQC ------
-  
   message("Tool 3: DropletQC ...")
   
-  if ("nf" %in% colnames(seurat@meta.data)){
+  DropletQC_start_1 <- Sys.time()
+
+  if ("nf" %in% colnames(input_data@meta.data)){
     
     # Extract nf meta data & associated cell barcode from Seurat object
-    edDf <- data.frame(nf = as.numeric(seurat$nf), umi = seurat$nCount_RNA)
-    nf_col <- as.numeric(seurat$nf)
+    edDf <- data.frame(nf = as.numeric(input_data$nf), umi = input_data$nCount_RNA)
+    nf_col <- as.numeric(input_data$nf)
     
   } else {
     
     # Extract nf alternative nf_malat1 if nf absent & associated cell barcode from Seurat object
-    edDf <- data.frame(nf = as.numeric(seurat$nf_malat1), umi = seurat$nCount_RNA)
-    nf_col <- as.numeric(seurat$nf_malat1)
+    edDf <- data.frame(nf = as.numeric(input_data$nf_malat1), umi = input_data$nCount_RNA)
+    nf_col <- as.numeric(input_data$nf_malat1)
     
   }
   
   # Use droplet_qc function to identify empty droplets
   edDf$umi <- as.integer(edDf$umi)
   edresultsDf <- identify_empty_drops(edDf)
+  DropletQC_stop_1 <- Sys.time()
   
-  # Identify damaged cells
 
   # Generate rough cluster labels 
-  temp <- NormalizeData(seurat, verbose = FALSE) %>%
+  temp <- NormalizeData(input_data, verbose = FALSE) %>%
     FindVariableFeatures(verbose = FALSE) %>%
     ScaleData(verbose = FALSE) %>%
     RunPCA(verbose = FALSE) %>%
     FindNeighbors(dims = 1:10, verbose = FALSE) %>%
-    FindClusters(verbose = FALSE, resolution = 0.1)
+    FindClusters(verbose = FALSE, resolution = 0.1) %>% 
+    RunUMAP(dims = 1:10)
   
+  # If clusters are too small, mark to combine with others
+  celltype_table <- table(temp$seurat_clusters)
+  combine <- as.integer(names(celltype_table)[celltype_table < 200])
+  remaining_clusters <- setdiff(as.integer(names(celltype_table)), combine)
+  combine_with <- remaining_clusters[which.min(celltype_table[as.character(remaining_clusters)])]
+  temp$seurat_clusters <- ifelse(temp$seurat_clusters %in% combine, combine_with, temp$seurat_clusters)
+
   # Extract cluster assignments 
+  DropletQC_start_2 <- Sys.time()
   cell_type <- temp$seurat_clusters 
   
   # Create input data frame 
   dcDf <- data.frame(
     nf = nf_col,
-    umi = as.integer(seurat$nCount_RNA),
+    umi = as.integer(input_data$nCount_RNA),
     cell_status = edresultsDf$cell_status,
     cell_type = cell_type
   )
   
-  if (project_name %in% c("PDX_dead")){
-    dcDf$cell_type <- 1
-  }
-  
-  # Run damaged detection & ignore empty droplets 
+  # Run damaged detection 
   dcresultsDf <- identify_damaged_cells(nf_umi_ed_ct = dcDf)
-  seurat$DropletQC <- dcresultsDf$df$cell_status[match(rownames(dcresultsDf$df), rownames(seurat@meta.data))]
+  input_data$DropletQC <- dcresultsDf$df$cell_status[match(rownames(dcresultsDf$df), rownames(input_data@meta.data))]
   
   # Two versions of DropletQC, one leaving empty droplets in & other not 
-  seurat$DropletQC_empty <- seurat$DropletQC
-  seurat$DropletQC <- ifelse(seurat$DropletQC == "damaged_cell", "damaged", "cell")
+  input_data$DropletQC_empty <- input_data$DropletQC
+  input_data$DropletQC <- ifelse(input_data$DropletQC == "damaged_cell", "damaged", "cell")
+  DropletQC_stop_2 <- Sys.time()
   
+  # Calculate timing
+  DropletQC_duration_1 <- as.numeric(difftime(DropletQC_stop_1, DropletQC_start_1, units = "secs"))
+  DropletQC_duration_2 <- as.numeric(difftime(DropletQC_stop_2, DropletQC_start_2, units = "secs"))
+  DropletQC_duration <- DropletQC_duration_1 + DropletQC_duration_2
   
   # Tool 4: miQC -------
+  message("Tool 4: miQC ...")
+  # Start timing the miQC process
+  miQC_start <- Sys.time()
   
-  # Create input
-  counts <- seurat@assays$RNA
+  # Extract counts from the input data
+  counts <- input_data@assays$RNA
+  
+  # Create a SingleCellExperiment object
   sce <- SingleCellExperiment(list(counts = counts))
-  rowData(sce)$featureType <- rownames(seurat@assays$RNA)
-  colData(sce)$subsets_mito_percent <- seurat$mt.percent
+  
+  # Assign feature types and mitochondrial percentages
+  rowData(sce)$featureType <- rownames(input_data@assays$RNA)
+  colData(sce)$subsets_mito_percent <- input_data$mt.percent
   mainExpName(sce) <- 'gene'
-  colData(sce)$detected <- seurat$nFeature_RNA
-
-  # Function to run miQC & generate stats (single cell experiment object)
+  colData(sce)$detected <- input_data$nFeature_RNA
+  
+  # Function to run miQC and count the number of cells marked as 'damaged'
   evaluate_model <- function(sce, model_type) {
     tryCatch({
-      # Run the miQC function 
+      # Fit the mixture model
       model <- mixtureModel(sce, model_type)
-      plotMetrics(sce)
-      plotModel(sce)
       
-      # Calculate AIC and BIC for the fitted model
-      aic_value <- AIC(model)
-      bic_value <- BIC(model)
+      # Filter cells based on the model
+      sce_filtered <- filterCells(sce, model)
       
-      return(list(model = model, 
-                  AIC = aic_value, 
-                  BIC = bic_value))
+      # Determine the number of cells marked as 'damaged'
+      damaged_cells <- setdiff(colnames(sce), colnames(sce_filtered))
+      num_damaged <- length(damaged_cells)
+      
+      return(list(model = model, num_damaged = num_damaged))
     }, error = function(e) {
       message("Error in evaluate_model with model_type = ", model_type, ": ", e$message)
-      stop("Evaluation failed, setting all cells to 'cell'")  # Stop the workflow and handle the error in the main code
+      stop("Evaluation failed, setting all cells to 'cell'")
     })
   }
   
-  # Generate the different models 
+  # Define the model types to evaluate
   model_types <- c("linear", "spline", "polynomial", "one_dimensional")
-  results <- list()
   
-  # Try evaluating each model type
+  # Evaluate each model type
+  results <- list()
   for (model_type in model_types) {
     result <- tryCatch({
       evaluate_model(sce, model_type = model_type)
     }, error = function(e) {
       # If an error occurs, set miQC to "cell" and exit immediately
-      seurat$miQC <- "cell"
+      input_data$miQC <- "cell"
       message("All cells set to 'cell' due to error in model evaluation.")
-      return(NULL)  # Exit the loop early
+      return(NULL)
     })
     
-    # If no error, store result
+    # If no error, store the result
     if (!is.null(result)) {
       results[[model_type]] <- result
     } else {
@@ -241,70 +244,89 @@ benchmark <- function(
     }
   }
   
-  # Continue with the workflow only if results were obtained
+  # Proceed only if results were obtained
   if (length(results) > 0) {
-    # Extract AIC and BIC values for all successfully fitted models
-    aic_values <- sapply(results, function(x) x$AIC)
-    bic_values <- sapply(results, function(x) x$BIC)
+    # Extract the number of damaged cells for each model
+    num_damaged_cells <- sapply(results, function(x) x$num_damaged)
     
-    # Rank the models based on AIC and BIC (lowest is better)
-    aic_ranks <- rank(aic_values)
-    bic_ranks <- rank(bic_values)
-    combined_ranks <- aic_ranks + bic_ranks
+    # Select the model that removes the fewest cells
+    best_model_type <- names(which.min(num_damaged_cells))
     
-    # Select the best fit model (model with lowest combined rank)
-    minimum_score <- min(combined_ranks) # For terminal output only 
-    best_model_type <- names(which.min(combined_ranks))
+    # If a specific model method is provided, override the selection
+    if (!is.null(model_method)) {
+      best_model_type <- model_method
+    }
     
-    if (!is.null(model_method)) { best_model_type <- model_method }
-    
-    # Subset based on the selected model
+    # Apply the best model to filter cells
     message("\nTool 4: miQC ...    ", best_model_type)
-    sce_subset <- filterCells(sce, results[[best_model_type]]$model) 
-    miQC <- colnames(sce_subset) 
-    seurat$miQC <- ifelse(rownames(seurat@meta.data) %in% miQC, "cell", "damaged")
+    best_model <- results[[best_model_type]]$model
+    sce_subset <- filterCells(sce, best_model)
+    miQC_cells <- colnames(sce_subset)
+    
+    # Update the input data with miQC results
+    input_data$miQC <- ifelse(rownames(input_data@meta.data) %in% miQC_cells, "cell", "damaged")
     
     # Optional: plot metrics if required
-    if (view_plot) { print(plotMetrics(sce)) }
-    
+    if (view_plot) {
+      print(plotModel(sce))
+    }
     
   } else {
-    
-    # In case all models failed miQC was set to "cell" earlier
+    # In case all models failed, set miQC to "cell"
     message("All miQC models failed.")
+    input_data$miQC <- "cell"
   }
   
-  # Making sure 
-  if (!"miQC" %in% colnames(seurat@meta.data)) {
-    seurat$miQC <- "cell"
-  }
   
-  # Tool 5: scater -------
-  message("")
+  
+  miQC_end <- Sys.time()
+  miQC_duration <- as.numeric(difftime(miQC_end, miQC_start, units = "secs"))
+  
+  
+  # Tool 5 & 6: scater -------
   message("Tool 5: scater ...")
-  
-  # Like miQC, scater requires single cell experiment object (sce) input 
-  sce <- as.SingleCellExperiment(seurat)
-  sce <- addPerCellQCMetrics(sce)
 
+  # Like miQC, scater requires single cell experiment object (sce) input 
+  scater_PCA_start <- Sys.time()
+  sce <- as.SingleCellExperiment(input_data)
+  sce <- addPerCellQCMetrics(sce)
+  
   # Automated outlier labeling for low quality cells 
   scater <- runColDataPCA(sce,
                           ncomponents = 2, 
                           variables = c("nCount_RNA", "nFeature_RNA", "mt.percent", "rb.percent"), 
                           outliers = TRUE)
   
-  # Transfer to Seurat 
-  seurat$scater <- scater$outlier
-  seurat$scater <- ifelse(seurat$scater == "TRUE", "damaged", "cell")
+  input_data$scater_PCA <- scater$outlier
+  input_data$scater_PCA <- ifelse(input_data$scater_PCA == "TRUE", "damaged", "cell")
+  
+  # Record time
+  scater_PCA_end <- Sys.time()
+  scater_PCA_duration <- as.numeric(difftime(scater_PCA_end, scater_PCA_start, units = "secs"))
+    
+  
+  # Alternative scater function
+  scater_Filter_start <- Sys.time()
+  sce <- as.SingleCellExperiment(input_data)
+  sce <- addPerCellQCMetrics(sce)
+  perCellQCFilters <- perCellQCFilters(sce, sub.fields = c("nCount_RNA", "nFeature_RNA", "mt.percent", "rb.percent"))
+  input_data$scater_Filter <- perCellQCFilters$discard
+  input_data$scater_Filter <- ifelse(input_data$scater_Filter == "TRUE", "damaged", "cell")
   
   
-  # Tool 6: valiDrops -------
+  # Record time
+  scater_Filter_end <- Sys.time()
+  scater_Filter_duration <- as.numeric(difftime(scater_Filter_end, scater_Filter_start, units = "secs"))
   
+  
+  
+  # Tool 7: valiDrops -------
   message("Tool 6: valiDrops ...")
   
   # Extract matrix from Seurat object
-  expression_matrix <- GetAssayData(seurat, layer = "counts")
-
+  valiDrops_start <- Sys.time()
+  expression_matrix <- GetAssayData(input_data, layer = "counts")
+  
   if (organism == "Hsap") {species <- "human"}
   if (organism == "Mmus") {species <- "mouse"}
   
@@ -318,26 +340,29 @@ benchmark <- function(
                           metrics = expression_metrics$metrics)
   
   # Add to benchmark seurat object
-  seurat$valiDrops <- valiDrops$label[match(rownames(seurat@meta.data), valiDrops$metrics$barcode)]
-  seurat$valiDrops <- ifelse(seurat$valiDrops == "dead", "damaged", "cell")
+  input_data$valiDrops <- valiDrops$label[match(rownames(input_data@meta.data), valiDrops$metrics$barcode)]
+  input_data$valiDrops <- ifelse(input_data$valiDrops == "dead", "damaged", "cell")
   
+  # Record time
+  valiDrops_end <- Sys.time()
+  valiDrops_duration <- as.numeric(difftime(valiDrops_end, valiDrops_start, units = "secs"))
   
-  # Manual methods 
+  # Manual methods ----
   
   # Manual 1: Mito fixed threshold ------
-  seurat$manual_fixed_mito <- ifelse(seurat$mt.percent > 10, "damaged", "cell")
+  input_data$manual_fixed_mito <- ifelse(input_data$mt.percent > 10, "damaged", "cell")
   
   # Preparation for outlier-based manual methods 
   # Extract df, add cell barcode identifies, & transform library size values for better Mahalanobis distance calculations 
-  seurat_df <- seurat@meta.data
-  seurat_df$barcodes <- rownames(seurat_df)
-  seurat_df$nCount_RNA <- log10(seurat_df$nCount_RNA)
-  seurat_df$nFeature_RNA <- log10(seurat_df$nFeature_RNA)
+  input_data_df <- input_data@meta.data
+  input_data_df$barcodes <- rownames(input_data_df)
+  input_data_df$nCount_RNA <- log10(input_data_df$nCount_RNA)
+  input_data_df$nFeature_RNA <- log10(input_data_df$nFeature_RNA)
   
   # Transform malat1 counts for cases where they are close to zero 
   if (project_name %in% c("hLiver")){
     
-    seurat_df$malat1.percent <- log10(seurat_df$malat1.percent)
+    input_data_df$malat1.percent <- log10(input_data_df$malat1.percent)
     
   }
   
@@ -383,10 +408,10 @@ benchmark <- function(
   # Manual 2: Mito univariate outliers (MAD) ------
   
   # Use median and MAD to define threshold 
-  uni_mito_df  <- seurat_df[, c("mt.percent")]
+  uni_mito_df  <- input_data_df[, c("mt.percent")]
   median_mito <- median(uni_mito_df , na.rm = TRUE)
   mad_mito <- mad(uni_mito_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
-  threshold_percentile <- quantile(seurat$mt.percent, probs = 0.90, na.rm = TRUE)
+  # threshold_percentile <- quantile(input_data$mt.percent, probs = 0.90, na.rm = TRUE)
   
   # Adjust for liver case 
   if (project_name == "hLiver"){
@@ -402,97 +427,30 @@ benchmark <- function(
     
   }
   
-  
   # By default chose the bigger one
-  if (threshold_mad >= threshold_percentile){ 
-    threshold = threshold_mad
-  } else {
-    threshold = threshold_percentile
-  }
+  # if (threshold_mad >= threshold_percentile){ 
+  #   threshold = threshold_mad
+  # } else {
+  #   threshold = threshold_percentile
+  # }
   
   # Use threshold to find outliers
-  outliers_mito <- uni_mito_df  > threshold
-  uni_mito_df  <- as.data.frame(seurat_df[, c("mt.percent")])
-  rownames(uni_mito_df ) <- rownames(seurat_df)
+  outliers_mito <- uni_mito_df  > threshold_mad
+  uni_mito_df  <- as.data.frame(input_data_df[, c("mt.percent")])
+  rownames(uni_mito_df ) <- rownames(input_data_df)
   uni_mito_results <- data.frame(barcodes = rownames(uni_mito_df), outliers = outliers_mito)
   uni_mito_results$outliers <- ifelse(uni_mito_results$outliers == "TRUE", "damaged", "cell")
-  seurat$manual_adaptive_mito <- uni_mito_results$outliers
-
-
-  # Add a check for groundtruth cases (automated mimic to looking at violin plots and adjusting)
-  groundtruth <-  c("GM18507_dead", "GM18507_dying", "HEK293_apoptotic", "HEK293_proapoptotic", "PDX_dead")
- 
-  if (project_name %in% groundtruth) {
-    
-    # Define damaged label 
-    unique_ids <- unique(seurat$orig.ident)
-    damage_label <- unique_ids[!grepl("control", unique_ids)]
-    
-    # Calculate performance
-    seurat$fixed <- ifelse(seurat$manual_fixed_mito == "damaged" & seurat$orig.ident == damage_label, "True" , "-")
-    seurat$adaptive <- ifelse(seurat$manual_adaptive_mito == "damaged" & seurat$orig.ident == damage_label, "True" , "-")
-    
-    adaptive <- (table(seurat$adaptive)[2]) / (table(seurat$manual_adaptive_mito)[2])
-    fixed <- (table(seurat$fixed)[2]) / (table(seurat$manual_fixed_mito)[2])
-    
-    # Decrease manual threshold until adaptive is better than fixed 
-    check <- adaptive - fixed
-    
-    # Check if fixed is better 
-    if (check <= 0 | is.na(check)){
-      
-      # Use median and MAD to define threshold 
-      uni_mito_df  <- seurat_df[, c("mt.percent")]
-      median_mito <- median(uni_mito_df , na.rm = TRUE)
-      mad_mito <- mad(uni_mito_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
-      dynamic_constant <- find_dynamic_mad_constant( uni_mito_df, direction = "upper", min_outliers = 5)
-      threshold_mad <- median_mito +  dynamic_constant * mad_mito
-      threshold_percentile <- quantile(seurat$mt.percent, probs = 0.90, na.rm = TRUE)
-      
-      # By default choses the bigger one
-      if (threshold_mad >= threshold_percentile){ 
-        threshold = threshold_percentile
-      } else {
-        threshold = threshold_mad
-      }
-      
-      # Adjust threshold 
-      threshold <- threshold / 5
-      
-      # Use threshold to find outliers
-      outliers_mito <- uni_mito_df  > threshold
-      uni_mito_df  <- as.data.frame(seurat_df[, c("mt.percent")])
-      rownames(uni_mito_df ) <- rownames(seurat_df)
-      uni_mito_results <- data.frame(barcodes = rownames(uni_mito_df), outliers = outliers_mito)
-      uni_mito_results$outliers <- ifelse(uni_mito_results$outliers == "TRUE", "damaged", "cell")
-      seurat$manual_adaptive_mito <- uni_mito_results$outliers
-      seurat$adaptive <- ifelse(seurat$manual_adaptive_mito == "damaged" & seurat$orig.ident == damage_label, "True" , "-")
-      adaptive <- (table(seurat$adaptive)[2]) / (table(seurat$manual_adaptive_mito)[2])
-    
-      seurat$fixed <- ifelse(seurat$manual_fixed_mito == "damaged" & seurat$orig.ident == damage_label, "True" , "-")
-      fixed <- (table(seurat$fixed)[2]) / (table(seurat$manual_fixed_mito)[2])
-      
-      # Decrease manual threshold until adaptive is better than fixed 
-      check <- adaptive - fixed
-    
-      print(check)
-      
-      seurat$fixed <- NULL
-      seurat$adaptive <- NULL
- 
-    }
-  }
-  
+  input_data$manual_adaptive_mito <- uni_mito_results$outliers
   
   # Manual 3: Mito/Ribo intersecting outliers (MAD): mitochondrial and ribosomal percentages -------
   
   # Adjust mito. to include ribo.
   
   # Use median and MAD to define threshold 
-  uni_ribo_df  <- seurat_df[, c("rb.percent")]
+  uni_ribo_df  <- input_data_df[, c("rb.percent")]
   median_ribo <- median(uni_ribo_df , na.rm = TRUE)
   mad_ribo <- mad(uni_ribo_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
-  threshold_percentile <- quantile(seurat$rb.percent, probs = 0.10, na.rm = TRUE)
+  # threshold_percentile <- quantile(input_data$rb.percent, probs = 0.10, na.rm = TRUE)
   
   # Adjust for liver case 
   if (project_name == "hLiver"){
@@ -508,98 +466,72 @@ benchmark <- function(
     
   }
   
-  # Default chose the 
-  if (threshold_mad >= threshold_percentile){
-    threshold = threshold_mad
-  } else {
-    threshold = threshold_percentile
-  }
-  
-  if (project_name == "HEK293_proapoptotic"){
-    
-    threshold_percentile <- quantile(seurat$rb.percent, probs = 0.40, na.rm = TRUE)
-    threshold = threshold_percentile * 1.5
-    
-  }
-  
   # Use threshold to find outliers
-  outliers_ribo <- uni_ribo_df < threshold
-  uni_ribo_df  <- as.data.frame(seurat_df[, c("rb.percent")])
-  rownames(uni_ribo_df ) <- rownames(seurat_df)
+  outliers_ribo <- uni_ribo_df < threshold_mad
+  uni_ribo_df  <- as.data.frame(input_data_df[, c("rb.percent")])
+  rownames(uni_ribo_df ) <- rownames(input_data_df)
   uni_ribo_results <- data.frame(barcodes = rownames(uni_ribo_df), outliers = outliers_ribo)
   uni_ribo_results$outliers <- ifelse(uni_ribo_results$outliers == "TRUE", "damaged", "cell")
   
   # Add ribo's to adjust mito outlier 
-  seurat$manual_mito_ribo <- uni_ribo_results$outliers
-  seurat$manual_mito_ribo <- ifelse(seurat$manual_adaptive_mito == "damaged" & seurat$manual_mito_ribo == "damaged", "damaged", "cell")
+  input_data$manual_mito_ribo <- uni_ribo_results$outliers
+  input_data$manual_mito_ribo <- ifelse(input_data$manual_adaptive_mito == "damaged" & input_data$manual_mito_ribo == "damaged", "damaged", "cell")
   
   
   # Manual 4: Mito/Ribo/UMI/feature intersecting outliers (MAD) -------
   
   # Define broader percentile threshold for UMI 
-  uni_count_df  <- seurat_df[, c("nCount_RNA")]
+  uni_count_df  <- input_data_df[, c("nCount_RNA")]
   median_count <- median(uni_count_df , na.rm = TRUE)
   mad_count <- mad(uni_count_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
   dynamic_constant <- find_dynamic_mad_constant(uni_count_df, direction = "lower", min_outliers = 5)
   threshold_MAD <- median_ribo - dynamic_constant * mad_ribo
-  threshold_percentile <- quantile(log10(seurat$nCount_RNA), probs = 0.10, na.rm = TRUE)
- 
-  # Default chose the largest 
-  if (threshold_MAD <= threshold_percentile){
-    threshold = threshold_percentile
-  } else {
-    threshold = threshold_MAD
-  }
+  
   
   # Use threshold to find outliers 
-  outliers_count <- uni_count_df  < threshold
-  uni_count_df  <- as.data.frame(seurat_df[, c("nCount_RNA")])
-  rownames(uni_count_df ) <- rownames(seurat_df)
+  outliers_count <- uni_count_df  < threshold_MAD
+  uni_count_df  <- as.data.frame(input_data_df[, c("nCount_RNA")])
+  rownames(uni_count_df ) <- rownames(input_data_df)
   uni_count_results <- data.frame(barcodes = rownames(uni_count_df), outliers = outliers_count)
   uni_count_results$outliers <- ifelse(uni_count_results$outliers == "TRUE", "damaged", "cell")
   
   # Add ribo's to adjust mito outlier 
-  seurat$manual_mito_ribo_umi <- uni_count_results$outliers
-  seurat$manual_mito_ribo_umi <- ifelse(seurat$manual_mito_ribo == "damaged" & seurat$manual_mito_ribo_umi == "damaged", "damaged", "cell")
+  input_data$manual_mito_ribo_umi <- uni_count_results$outliers
+  input_data$manual_mito_ribo_umi <- ifelse(input_data$manual_mito_ribo == "damaged" & input_data$manual_mito_ribo_umi == "damaged", "damaged", "cell")
   
   
   # Repeat for features
-  uni_feature_df  <- seurat_df[, c("nFeature_RNA")]
+  uni_feature_df  <- input_data_df[, c("nFeature_RNA")]
   median_feature <- median(uni_feature_df , na.rm = TRUE)
   mad_feature <- mad(uni_feature_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
   dynamic_constant <- find_dynamic_mad_constant(uni_feature_df, direction = "lower", min_outliers = 10)
   threshold <- median_feature - dynamic_constant * mad_feature
-
+  
   # Use threshold to find outliers 
   outliers_feature <- uni_feature_df  < threshold
-  uni_feature_df  <- as.data.frame(seurat_df[, c("nFeature_RNA")])
-  rownames(uni_feature_df ) <- rownames(seurat_df)
+  uni_feature_df  <- as.data.frame(input_data_df[, c("nFeature_RNA")])
+  rownames(uni_feature_df ) <- rownames(input_data_df)
   uni_feature_results <- data.frame(barcodes = rownames(uni_feature_df), outliers = outliers_feature)
   uni_feature_results$outliers <- ifelse(uni_feature_results$outliers == "TRUE", "damaged", "cell")
   
   # Add ribo's to adjust mito outlier 
-  seurat$manual_mito_ribo_feature <- uni_feature_results$outliers
-  seurat$manual_mito_ribo_library <- ifelse(seurat$manual_mito_ribo_umi == "damaged" & seurat$manual_mito_ribo_feature == "damaged", "damaged", "cell")
-
-  if (project_name == "HEK293_proapoptotic"){
-    seurat$manual_mito_ribo_library <- seurat$manual_mito_ribo_umi
-  }
+  input_data$manual_mito_ribo_feature <- uni_feature_results$outliers
+  input_data$manual_mito_ribo_library <- ifelse(input_data$manual_mito_ribo_umi == "damaged" & input_data$manual_mito_ribo_feature == "damaged", "damaged", "cell")
   
   
   # Manual 5: UMI/feature intersecting outliers (MAD) -------
   
   # Isolated for count and feature outliers 
-  seurat$manual_umi <- uni_count_results$outliers
-  seurat$manual_feature <- uni_feature_results$outliers
-  seurat$manual_library <- ifelse(seurat$manual_umi == "damaged" | seurat$manual_feature == "damaged", "damaged", "cell")
+  input_data$manual_umi <- uni_count_results$outliers
+  input_data$manual_feature <- uni_feature_results$outliers
+  input_data$manual_library <- ifelse(input_data$manual_umi == "damaged" | input_data$manual_feature == "damaged", "damaged", "cell")
   
   # Manual 6: MALAT1 univariate outliers (MAD) ------
   
   # Use median and MAD to define threshold 
-  uni_malat1_df  <- seurat_df[, c("malat1.percent")]
+  uni_malat1_df  <- input_data_df[, c("malat1")]
   median_malat1 <- median(uni_malat1_df , na.rm = TRUE)
   mad_malat1 <- mad(uni_malat1_df , constant = 1, na.rm = TRUE)  # Use constant = 1 to follow the typical MAD definition
-  threshold_percentile <- quantile(seurat$malat1.percent, probs = 0.90, na.rm = TRUE)
   
   # Adjust for liver case 
   if (project_name == "hLiver"){
@@ -615,208 +547,69 @@ benchmark <- function(
     
   }
   
-  # Default chose the largest
-  if (threshold_mad <= threshold_percentile){
-    threshold = threshold_percentile
-  } else {
-    threshold = threshold_mad
-  }
-  
-  if (project_name %in% c("HEK293_apoptotic", "HEK293_proapoptotic", "PDX_dead")){
-    threshold = threshold_percentile
-  }
-  
   # Use threshold to find outliers
-  outliers_malat1 <- uni_malat1_df  > threshold
-  uni_malat1_df  <- as.data.frame(seurat_df[, c("malat1.percent")])
-  rownames(uni_malat1_df) <- rownames(seurat_df)
+  outliers_malat1 <- uni_malat1_df  > threshold_mad
+  uni_malat1_df  <- as.data.frame(input_data_df[, c("malat1")])
+  rownames(uni_malat1_df) <- rownames(input_data_df)
   uni_malat1_results <- data.frame(barcodes = rownames(uni_malat1_df), outliers = outliers_malat1)
   uni_malat1_results$outliers <- ifelse(uni_malat1_results$outliers == "TRUE", "damaged", "cell")
   
-  # Add outlier labels to cells in the seurat object 
-  seurat$manual_malat1 <- uni_malat1_results$outliers
-  
+  # Add outlier labels to cells in the input_data object 
+  input_data$manual_malat1 <- uni_malat1_results$outliers
   
   # Manual 7: MALAT1/Mito/Ribo intersecting outliers (MAD) ----
   
   # Adjusting the MALAT1 predictions by other measures 
-  seurat$manual_malat1_mito_ribo <- ifelse(seurat$manual_malat1 == "damaged" & seurat$manual_mito_ribo == "damaged", "damaged", "cell")
+  input_data$manual_malat1_mito <- ifelse(input_data$manual_malat1 == "damaged" & input_data$manual_adaptive_mito == "damaged", "damaged", "cell")
   
   # Return output -------
-
+  
   # Call helper function 
-  final_df <- summarise_results(seurat = seurat)
-
+  final_df <- summarise_results(seurat = input_data)
+  
   write.csv(final_df, 
             paste0(output_path, "/", project_name, "_summary.csv"), 
             quote = FALSE, 
             row.names = FALSE) 
   
-  write.csv(seurat@meta.data, 
+  write.csv(input_data@meta.data, 
             paste0(output_path, "/", project_name, ".csv"), 
             quote = FALSE, 
             row.names = TRUE) 
   
   
-  # Plot the output -------
-  
-  # Call helper function
-  if (output_plot){
-  plot <- BenchPlot(seurat, 
-                    output_file = paste0(output_path, "/", project_name, ".png"), 
-                    organism)
-  }
-  
   message("Complete!", "\n")
   
   # Global environment output 
-  return(seurat)
+  return(input_data)
   
 }
-
 
 
 #-------------------------------------------------------------------------------
 # FUNCTION RUNNING
 #-------------------------------------------------------------------------------
 
-# Ground truth 
-GM18507_dead <- benchmark(seurat = GM18507_dead, 
-                          project_name = "GM18507_dead",
-                          model_method = "linear",
-                          ddqc_path = "./C_Test_Strategies/data/ddqc_output/GM18507_dead.csv", 
-                          ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/GM18507dead.csv")
+# Define mouse samples
+mouse_samples <- c("mLiver_processed", "mLung_processed", "mPBMC_processed")
 
-
-GM18507_dying <- benchmark(seurat = GM18507_dying, 
-                           project_name = "GM18507_dying",
-                           ddqc_path = "./C_Test_Strategies/data/ddqc_output/GM18507_dying.csv", 
-                           ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/GM18507dying.csv")
-
-
-HEK293_apo <-  benchmark(seurat = HEK293_apo, 
-                         project_name = "HEK293_apoptotic",
-                         model_method = "polynomial",
-                         ddqc_path = "./C_Test_Strategies/data/ddqc_output/HEK293_apo.csv", 
-                         ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/HEK293apo.csv")
-
-
-HEK293_pro <-  benchmark(seurat = HEK293_pro, 
-                         project_name = "HEK293_proapoptotic",
-                         model_method = "one-dimensional",
-                         ddqc_path = "./C_Test_Strategies/data/ddqc_output/HEK293_apo.csv", 
-                         ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/HEK293pro.csv")
-
-
-PDX_dead <- benchmark(seurat = PDX_dead, 
-                      project_name = "PDX_dead",
-                      model_method = "linear",
-                      ddqc_path = "./C_Test_Strategies/data/ddqc_output/PDX_dead.csv", 
-                      ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/PDX.csv")
-
-
-
-# Cell lines 
-A549 <- benchmark(seurat = A549,
-                  project_name = "A549",
-                  model_method = "linear",
-                  ddqc_path = "./C_Test_Strategies/data/ddqc_output/A549.csv",
-                  ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/A549_input.csv")
-
-HCT116 <- benchmark(seurat = HCT116,
-                  project_name = "HCT116",
-                  ddqc_path = "./C_Test_Strategies/data/ddqc_output/HCT116.csv",
-                  ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/HCT116_input.csv")
-
-Jurkat <- benchmark(seurat = Jurkat,
-                  project_name = "Jurkat",
-                  # model_method = "linear",
-                  ddqc_path = "./C_Test_Strategies/data/ddqc_output/jurkat.csv",
-                  ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/jurkat_input.csv")
-
-
-# Diseased 
-dLiver <- benchmark(seurat = dLiver,
-                    project_name = "dLiver",
-                    model_method = "linear", # 1714 / 1733
-                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/dLiver.csv",
-                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/dLiver_input.csv")
-
-
-dLung <- benchmark(seurat = dLung,
-                    project_name = "dLung",
-                    # model_method = "linear",
-                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/dLung.csv",
-                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/dLung_input.csv")
-
-dPBMC <- benchmark(seurat = dPBMC,
-                    project_name = "dPBMC",
-                    # model_method = "linear",
-                    ddqc_path = "./C_Test_Strategies/data//ddqc_output/dPBMC.csv",
-                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/dPBMC_input.csv")
-
-# Healthy 
-hLiver <- benchmark(seurat = hLiver,
-                    project_name = "hLiver",
-                    model_method = "one-dimensional",
-                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/hLiver.csv",
-                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/hLiver_input.csv")
-
-
-hLung <- benchmark(seurat = hLung,
-                   project_name = "hLung",
-                   # model_method = "linear",
-                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/hLung.csv",
-                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/hLung_input.csv")
-
-hPBMC <- benchmark(seurat = hPBMC,
-                   project_name = "hPBMC",
-                   # model_method = "linear",
-                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/hPBMC.csv",
-                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/hPBMC_input.csv")
-
-
-# Mouse 
-mLiver <- benchmark(seurat = mLiver,
-                    project_name = "mLiver",
-                    # model_method = "linear",
-                    organism = "Mmus",
-                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/mLiver.csv",
-                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/mLiver.csv")
-
-mLung <- benchmark(seurat = mLung,
-                   project_name = "mLung",
-                   # model_method = "linear",
-                   organism = "Mmus",
-                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/mLung.csv",
-                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/mLung.csv")
-
-mPBMC <- benchmark(seurat = mPBMC,
-                   project_name = "mPBMC",
-                   # model_method = "linear",
-                   organism = "Mmus",
-                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/mPBMC.csv",
-                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/mPBMC.csv")
-
-
-# Tumor isolates 
-ductal <- benchmark(seurat = ductal,
-                   project_name = "ductal",
-                   model_method = "linear",
-                   ddqc_path = "./C_Test_Strategies/data/ddqc_output/ductal.csv",
-                   ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/ductal_input.csv")
-
-glio <- benchmark(seurat = glio,
-                    project_name = "glio",
-                    # model_method = "linear",
-                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/glio.csv",
-                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/glio_input.csv")
-
-hodgkin <- benchmark(seurat = hodgkin,
-                    project_name = "hodgkin",
-                    model_method = "linear",
-                    ddqc_path = "./C_Test_Strategies/data/ddqc_output/hodgkin.csv",
-                    ensembleKQC_path = "./C_Test_Strategies/data/EnsembleKQC_output/hodgkin_input.csv")
+# Apply the benchmark function to each dataset in the results list
+benchmark_results <- lapply(names(datasets), function(sample_name) {
+  
+  # Retrieve the dataset
+  input_data <- datasets[[sample_name]]
+  
+  # Determine the organism based on the sample name
+  organism <- if (sample_name %in% mouse_samples) "Mmus" else "Hsap"
+  
+  # Run the benchmark function
+  benchmark(
+    input_data = input_data,
+    project_name = sample_name,
+    organism = organism
+  )
+  
+})
 
 
 
@@ -851,43 +644,43 @@ save_sampleQC <- function(seurat,
   #                               "manual_all", "manual_mito_ribo", "manual_mito", "manual_malat1", "manual_mito_isolated"),
   #                   output_file = paste0(output_path, "/", project_name, ".png"), 
   #                   organism)
-
-}  
   
+}  
+
 runSampleQC <- function(seurat){
-    
-    # Create SampleQC dataframe using default function 
-    qc_dt = make_qc_dt(seurat@meta.data, 
-                       sample_var  = 'orig.ident', 
-                       qc_names    = c('log_counts', 'log_feats', 'logit_mito'),
-                       annot_vars  = NULL
-    )
-    
-    
-    
-    # which QC metrics do we want to use?
-    qc_names    = c('log_counts', 'log_feats', 'logit_mito')
-    annots_disc = 'orig.ident' # discrete variables 
-    annots_cont = NULL # continuous variables 
-    
-    # Use dimensionality reduction to calculate distances between groups
-    qc_obj    = calc_pairwise_mmds(qc_dt, 
-                                   one_group_only = TRUE,
-                                   qc_names, 
-                                   annots_disc = annots_disc, 
-                                   annots_cont = annots_cont, 
-                                   n_cores = 4)# Fit each grouping 
-    
-    qc_obj = fit_sampleqc(qc_obj, K_list = rep(1, get_n_groups(qc_obj)))
-    outliers_dt = get_outliers(qc_obj)
-    
-    # Transfer outlier label (TRUE -> "damaged", FALSE -> "cell")
-    seurat$SampleQC <- outliers_dt$outlier
-    seurat$SampleQC <- ifelse(seurat$SampleQC == "TRUE", "damaged", "cell")
-    
-    return(seurat)
-    
-  }
+  
+  # Create SampleQC dataframe using default function 
+  qc_dt = make_qc_dt(seurat@meta.data, 
+                     sample_var  = 'orig.ident', 
+                     qc_names    = c('log_counts', 'log_feats', 'logit_mito'),
+                     annot_vars  = NULL
+  )
+  
+  
+  
+  # which QC metrics do we want to use?
+  qc_names    = c('log_counts', 'log_feats', 'logit_mito')
+  annots_disc = 'orig.ident' # discrete variables 
+  annots_cont = NULL # continuous variables 
+  
+  # Use dimensionality reduction to calculate distances between groups
+  qc_obj    = calc_pairwise_mmds(qc_dt, 
+                                 one_group_only = TRUE,
+                                 qc_names, 
+                                 annots_disc = annots_disc, 
+                                 annots_cont = annots_cont, 
+                                 n_cores = 4)# Fit each grouping 
+  
+  qc_obj = fit_sampleqc(qc_obj, K_list = rep(1, get_n_groups(qc_obj)))
+  outliers_dt = get_outliers(qc_obj)
+  
+  # Transfer outlier label (TRUE -> "damaged", FALSE -> "cell")
+  seurat$SampleQC <- outliers_dt$outlier
+  seurat$SampleQC <- ifelse(seurat$SampleQC == "TRUE", "damaged", "cell")
+  
+  return(seurat)
+  
+}
 
 
 # SampleQC for each collection of samples -----
@@ -907,8 +700,8 @@ groundtruth_unique <- subset(groundtruth, cells = unique_cells)
 # Merge for non-groundtruth (no repeated entries)
 non_groundtruth <- merge(x = A549,
                          y = c(HCT116, Jurkat, hLiver, hPBMC, hLung,
-                         dLiver, dPBMC, dLung, mLiver, mPBMC, mLung,
-                         ductal, hodgkin, glio),
+                               dLiver, dPBMC, dLung, mLiver, mPBMC, mLung,
+                               ductal, hodgkin, glio),
                          add.cell.ids = c("A549", "HCT116", "Jurkat", 
                                           "hLiver", "hPBMC", "hLung",
                                           "dLiver", "dPBMC", "dLung",
@@ -947,7 +740,7 @@ for (dataset in unique(non_groundtruth$orig.ident)){
   }
   
 }
-  
+
 
 # Split up the joined object and save meta data 
 GM18507_dead_subset <- subset(groundtruth_sampleQC, orig.ident %in% c("GM18507_dead", "GM18507_control"))
