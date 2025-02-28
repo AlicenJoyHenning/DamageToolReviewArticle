@@ -25,7 +25,7 @@
 # Install scDesign2
 #library(devtools)
 #devtools::install_github("JSB-UCLA/scDesign2")
-#install.packages("copula")
+#install.packages("ggpubr")
 
 # Load all packages 
 packages <- c("scDesign2", "cluster", "copula", "dplyr", 
@@ -183,8 +183,8 @@ simulate_damage <- function(count_matrix,
     r_samples <- runif(n_samples, 0.01, 0.7)  # 0.01 - 0.7 to 0.1 - 0.7 to 0.05 to 0.5 test if less intense
     
     # Compute A, B, and the absolute error for each sample
-    A_values <- (r_samples * R_i) / (M_i + r_samples * T_i)
-    B_values <- M_i / (M_i + r_samples * T_i)
+    A_values <- round(r_samples * R_i) / (M_i + r_samples * T_i)
+    B_values <- M_i / (M_i + round(r_samples * T_i))
     exp_decay_values <- exp(-lambda * A_values)
     errors <- abs(B_values - exp_decay_values)
     
@@ -438,6 +438,7 @@ simulate_matrices <- function(
   return(seurat)
   
 }
+
 
 
 # Iterate through sample sheet extracting parameters from entries
