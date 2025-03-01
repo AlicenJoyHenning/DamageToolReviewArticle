@@ -22,6 +22,10 @@ SimulateDamage <- function(
     counts,            # Single cell count matrix
     damage_proportion, # What is the target proportion of cells to be damaged? 
     annotated = FALSE, # Whether or not the cells have labels associated with cell type
+    target_damage = c(0.1, 0.8), # Range of damage
+    damage_steepness = "moderate",
+    damage_distribution = "right_skewed",
+    penalty_factor = 0.01,  # Reduce the probability for ribosomal genes by 50%
     organism = "Hsap"
 ) {
   # Calculate the number of damaged cells given target damage proportion 
@@ -67,12 +71,35 @@ SimulateDamage <- function(
   undamaged_cell_number <- data.frame(barcode = colnames(counts)[undamaged_cell_number_cells], status = rep("control", length(undamaged_cell_number_cells)))
   damage_label <- rbind(damage_label, undamaged_cell_number)
   
-  # Assign damage levels 10 % to 90 % 
-  # Generate right-skewed damage levels
-  damage_levels <- rbeta(length(damaged_cell_selections), shape1 = 2, shape2 = 5)
+  # Assign damage levels to the selected cells based on beta distribution 
   
-  # Scale values to the range [0.1, 0.8]
-  damage_levels <- 0.1 + (0.8 - 0.1) * damage_levels 
+  # Assign the steepness (peak height) to meet target
+  steepness_levels <- list(
+    shallow = 4,
+    moderate = 7,
+    steep = 12
+  )
+  
+  # Retrieve user specified steepness, default is "moderate"
+  steepness_value <- steepness_levels[[damage_steepness]]
+  
+  # Define shape parameters to achieve target distribution, default "right_skewed"
+  if (damage_distribution == "right_skewed") {
+    a <- steepness_value * 0.3
+    b <- steepness_value * 0.7
+  } else if (damage_distribution == "left_skewed") {
+    a <- steepness_value * 0.7
+    b <- steepness_value * 0.3
+  } else if (damage_distribution == "symmetric") {
+    a <- steepness_value * 0.5
+    b <- steepness_value * 0.5
+  }
+  
+  # Consolidate into target beta distribution 
+  damage_levels <- rbeta(length(damaged_cell_selections), shape1 = a, shape2 = b)
+  
+  # Scale values lie within target range, default c(0.1, 0.8)
+  damage_levels <- target_damage[1] + (target_damage[2] - target_damage[1]) * damage_levels 
   
   # Store the assigned damage levels in a dataframe
   damage_label$damage_level <- 0  # Default is 0 for undamaged cells
@@ -83,6 +110,12 @@ SimulateDamage <- function(
     mito_pattern <- "^MT-"
     ribo_pattern <- "^(RPS|RPL)"
     nuclear <- c("FIRRE", "NEAT1","XIST", "MALAT1", "MIAT", "MEG3", "KCNQ1OT1", "HOXA11-AS", "FTX") 
+  }
+  
+  if (organism == "Mmus") {
+    mito_pattern <- "^mt-"
+    ribo_pattern <- "^(rps|rpl)"
+    nuclear <- c("Firre", "Neat1","Xist", "Malat1", "Miat", "Meg3", "Kcnq1ot1", "Hoxa11-as", "Ftx") 
   }
   
   # Isolate gene set indices (consistent across cells, not subsetting the matrix)
@@ -115,7 +148,6 @@ SimulateDamage <- function(
       probabilities <- gene_totals / total_counts
       
       # Apply penalty to ribosomal genes
-      penalty_factor <- 0.01  # Reduce the probability for ribosomal genes by 50%
       probabilities[ribo_idx] <- probabilities[ribo_idx] * penalty_factor
       
       # Normalize probabilities so that the total sums to 1
@@ -153,40 +185,106 @@ SimulateDamage <- function(
   )
   
   # Function to generate QC plots
-  generate_plot <- function(data, x, y, damage_column = "Damaged_Level") {
+  generate_plot <- function(data, x, y, altered = FALSE, legend = FALSE, damage_column = "Damaged_Level") {
     
-    p <- ggplot(data, aes_string(x = x, y = y, colour = damage_column)) + 
-      scale_color_gradientn(
-        colours = c("grey", "#7023FD", "#E60006"), 
-        values = scales::rescale(c(0, 0.2, 1)),  # Map values from 0 to 1, with the midpoint at 0.5
-        limits = c(0, 1)  # Ensure the scale covers the full range of values
-      ) + 
-      scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
-      geom_point(size = 0.2) + 
-      theme_classic() + 
-      theme(plot.title = element_text(hjust = 0.5),
-            panel.border = element_rect(fill = NA, color = "black"),
-            legend.position = "none")
-    
-    return(p)
+    if (altered) {
+      p <- ggplot(data, aes_string(x = x, y = y, colour = damage_column)) + 
+        scale_color_gradientn(
+          colours = c("grey", "#7023FD", "#E60006"), 
+          values = scales::rescale(c(0, 0.3, 1)), 
+          limits = c(0, 1)
+        ) + 
+        scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
+        geom_point(size = 0.2) + 
+        theme_classic() + 
+        theme(
+          plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(fill = NA, color = "black"),
+          legend.position = "bottom",
+          legend.justification = "center",
+          legend.title = element_text(face = "bold", hjust = 0.5) # Center and bold the legend title
+        ) + 
+        guides(color = guide_colorbar(title = "Damage Level", title.position = "top"))
+      
+      return(p)
+      
+    } else {
+      p <- ggplot(data, aes_string(x = x, y = y)) + 
+        scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) + 
+        geom_point(size = 0.2, color = "gray") + 
+        theme_classic() + 
+        theme(
+          plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(fill = NA, color = "black"),
+          legend.position = "none"
+        )
+      
+      return(p)
+    }
   }
   
-  # Generate plots visualizing QC metrics before and after damaged perturbation
-  mito_ribo_old <- generate_plot(qc_summary, x = "Original_RiboProp", y = "Original_MitoProp") + scale_y_continuous(limits = c(0, 1), labels = number_format(accuracy = 0.1)) 
-  mito_ribo_new <- generate_plot(qc_summary, x = "New_RiboProp", y = "New_MitoProp") scale_y_continuous(limits = c(0, 1), labels = number_format(accuracy = 0.1)) 
-  mito_features_old <- generate_plot(qc_summary, x = "Original_Features", y = "Original_MitoProp")
-  mito_features_new <- generate_plot(qc_summary, x = "New_Features", y = "New_MitoProp")
+  # Generate individual plots 
+  mito_ribo_old <- generate_plot(qc_summary, x = "Original_RiboProp", y = "Original_MitoProp") + 
+    scale_x_continuous(limits = c(0, 1), labels = scales::number_format(accuracy = 0.1)) + 
+    labs(x = "Ribosomal proportion", y = "Mitochondrial proportion")
   
-  # Compile
-  plot <- ((mito_features_old / mito_features_new) | (mito_ribo_old / mito_ribo_new))
+  mito_ribo_new <- generate_plot(qc_summary, x = "New_RiboProp", y = "New_MitoProp", altered = TRUE) + 
+    scale_x_continuous(limits = c(0, 1), labels = scales::number_format(accuracy = 0.1))  + 
+    labs(x = "Ribosomal proportion", y = "Mitochondrial proportion")
+  
+  mito_features_old <- generate_plot(qc_summary, x = "Original_Features", y = "Original_MitoProp") + 
+    labs(x = "Features expressed", y = "Mitochondrial proportion")
+  
+  mito_features_new <- generate_plot(qc_summary, x = "New_Features", y = "New_MitoProp", altered = TRUE) + 
+    labs(x = "Features expressed", y = "Mitochondrial proportion")
+  
+  # Extract the legend from mito_ribo_new (ensure one legend is present)
+  legend <- ggpubr::get_legend(mito_ribo_new)
+  
+  # Create titles for the plots
+  title_original <- ggdraw() + 
+    draw_label("Original counts", fontface = 'bold', hjust = 0.5)
+  
+  title_altered <- ggdraw() + 
+    draw_label("Altered counts", fontface = 'bold',  hjust = 0.5)
+  
+  # Arrange original plots in a single row
+  original_plots <- plot_grid(mito_features_old, mito_ribo_old, ncol = 2)
+  
+  # Arrange altered plots in a single row 
+  mito_ribo_new_no_legend <- mito_ribo_new + theme(legend.position = "none")
+  mito_features_new_no_legend <- mito_features_new + theme(legend.position = "none")
+  altered_plots <- plot_grid(mito_features_new_no_legend, mito_ribo_new_no_legend, ncol = 2)
+  
+  # Combine the original and altered rows with their titles
+  original_with_title <- plot_grid(title_original, original_plots, ncol = 1, rel_heights = c(0.2, 1))
+  altered_with_title <- plot_grid(title_altered, altered_plots, ncol = 1, rel_heights = c(0.2, 1))
+  
+  # Combine the original and altered rows, and position the legend in its own row
+  final_plot <- plot_grid(
+    original_with_title, 
+    altered_with_title, 
+    legend,  # Legend in its own row
+    ncol = 1, 
+    rel_heights = c(1, 1, 0.25)  # Adjust relative height to fit legend
+  )
+  
+  # Increase margins around the total plot area
+  final_plot <- final_plot + 
+    theme(
+      plot.margin = margin(10, 20, 20, 20)  # Increase margins (top, right, bottom, left)
+    )
+  
+  # Display the final plot
+  print(final_plot)
+  
   
   # Return a list containing items of interest
-  return(list(matrix = damaged_counts, qc_summary = qc_summary, plot = plot))
+  return(list(matrix = damaged_counts, qc_summary = qc_summary, plot = final_plot))
 }
 
 output <- SimulateDamage(counts = PH_CT6_filtered_matrix,
                          damage_proportion = 0.5,
                          annotated = FALSE)  
 
-output$plot
-View(output$qc_summary)
+
