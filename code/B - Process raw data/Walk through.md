@@ -79,6 +79,7 @@ b) Chemistry v2 5' "extra length"
 
 whitelist: 737K-august-2016.txt 
 
+```
 STAR --runThreadN 20 \
      --genomeDir "$genome" \
      --readFilesIn "$read1" "$read2" \
@@ -96,7 +97,7 @@ STAR --runThreadN 20 \
      --soloFeatures Gene Velocyto \
      --outSAMtype BAM SortedByCoordinate \
      --outSAMattributes CM
-
+```
 
 c) Chemistry v3
 
