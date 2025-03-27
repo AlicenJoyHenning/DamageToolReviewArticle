@@ -60,7 +60,7 @@ whitelist: 737K-august-2016.txt
 
 STAR --runThreadN 20 \
      --genomeDir "$genome" \
-     --readFilesIn "$read2" "$read1 \
+     --readFilesIn "$read2" "$read1" \
      --soloType Droplet \
      --soloCBwhitelist "$whitelist" \
      --readFilesCommand gunzip -c \
